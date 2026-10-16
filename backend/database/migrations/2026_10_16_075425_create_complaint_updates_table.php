@@ -11,6 +11,7 @@ return new class extends Migration
     {
         Schema::create('complaint_updates', function (Blueprint $table) {
             $table->uuid('id')->primary();
+
             $table->uuid('complaint_id');
             $table->uuid('updated_by');
 
@@ -31,6 +32,7 @@ return new class extends Migration
                 ->restrictOnDelete();
 
             $table->index(['complaint_id', 'created_at']);
+            $table->index('updated_by');
         });
     }
 

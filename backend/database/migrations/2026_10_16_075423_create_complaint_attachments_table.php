@@ -11,9 +11,11 @@ return new class extends Migration
     {
         Schema::create('complaint_attachments', function (Blueprint $table) {
             $table->uuid('id')->primary();
+
             $table->uuid('complaint_id');
             $table->uuid('uploaded_by');
 
+            // Path of the file stored in Supabase Storage
             $table->string('file_path');
             $table->string('file_name');
             $table->string('mime_type');
@@ -31,7 +33,8 @@ return new class extends Migration
                 ->on('profiles')
                 ->restrictOnDelete();
 
-            $table->index('complaint_id');
+            $table->index(['complaint_id', 'created_at']);
+            $table->index('uploaded_by');
         });
     }
 

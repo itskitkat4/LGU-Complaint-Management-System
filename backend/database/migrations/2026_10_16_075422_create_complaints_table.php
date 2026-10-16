@@ -19,11 +19,17 @@ return new class extends Migration
             $table->string('title');
             $table->text('description');
 
+            // low, medium, high, urgent
             $table->string('priority')->default('medium');
+
+            // Initial complaint status
             $table->string('status')->default('submitted');
+
+            // barangay or lgu decided during review
             $table->string('resolution_level')->nullable();
 
             $table->text('rejection_reason')->nullable();
+
             $table->timestamps();
 
             $table->foreign('citizen_id')

@@ -10,11 +10,13 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('profiles', function (Blueprint $table) {
+            // Must match the user's UUID from Supabase Auth.
             $table->uuid('id')->primary();
 
             $table->string('full_name');
             $table->string('email')->unique();
-            $table->string('role');
+
+            $table->string('role')->index();
 
             $table->uuid('barangay_id')->nullable();
             $table->uuid('department_id')->nullable();
@@ -30,8 +32,6 @@ return new class extends Migration
                 ->references('id')
                 ->on('departments')
                 ->nullOnDelete();
-
-            $table->index('role');
         });
     }
 

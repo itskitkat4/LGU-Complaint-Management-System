@@ -11,9 +11,12 @@ return new class extends Migration
     {
         Schema::create('feedback', function (Blueprint $table) {
             $table->uuid('id')->primary();
+
+            // One feedback record per complaint
             $table->uuid('complaint_id')->unique();
             $table->uuid('citizen_id');
 
+            // Valid rating: 1 to 5 (enforce in API and database)
             $table->unsignedTinyInteger('rating');
             $table->text('comment')->nullable();
 
@@ -28,6 +31,8 @@ return new class extends Migration
                 ->references('id')
                 ->on('profiles')
                 ->restrictOnDelete();
+
+            $table->index('citizen_id');
         });
     }
 

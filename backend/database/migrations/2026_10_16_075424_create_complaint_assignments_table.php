@@ -11,15 +11,20 @@ return new class extends Migration
     {
         Schema::create('complaint_assignments', function (Blueprint $table) {
             $table->uuid('id')->primary();
+
             $table->uuid('complaint_id');
             $table->uuid('assigned_to');
             $table->uuid('assigned_by');
 
+            // barangay or lgu
             $table->string('assignment_level');
+
             $table->text('notes')->nullable();
 
             $table->timestamp('assigned_at')->useCurrent();
             $table->timestamp('ended_at')->nullable();
+
+            $table->timestamps();
 
             $table->foreign('complaint_id')
                 ->references('id')
@@ -36,8 +41,9 @@ return new class extends Migration
                 ->on('profiles')
                 ->restrictOnDelete();
 
-            $table->index('complaint_id');
-            $table->index('assigned_to');
+            $table->index(['complaint_id', 'assigned_at']);
+            $table->index(['assigned_to', 'ended_at']);
+            $table->index('assignment_level');
         });
     }
 
