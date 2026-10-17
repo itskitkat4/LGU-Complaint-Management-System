@@ -3,6 +3,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -34,6 +35,37 @@ return new class extends Migration
             $table->index(['complaint_id', 'created_at']);
             $table->index('updated_by');
         });
+
+        DB::statement("
+            ALTER TABLE complaint_updates
+            ADD CONSTRAINT complaint_updates_new_status_check
+            CHECK (new_status IN (
+                'submitted',
+                'under_review',
+                'assigned',
+                'in_progress',
+                'resolved',
+                'closed',
+                'rejected'
+            ))
+        ");
+
+        DB::statement("
+            ALTER TABLE complaint_updates
+            ADD CONSTRAINT complaint_updates_old_status_check
+            CHECK (
+                old_status IS NULL
+                OR old_status IN (
+                    'submitted',
+                    'under_review',
+                    'assigned',
+                    'in_progress',
+                    'resolved',
+                    'closed',
+                    'rejected'
+                )
+            )
+        ");
     }
 
     public function down(): void

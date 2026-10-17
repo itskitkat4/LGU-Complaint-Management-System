@@ -1,12 +1,11 @@
-
 <?php
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
-return new class extends Migration
-{
+return new class extends Migration {
     public function up(): void
     {
         Schema::create('complaint_assignments', function (Blueprint $table) {
@@ -45,7 +44,13 @@ return new class extends Migration
             $table->index(['assigned_to', 'ended_at']);
             $table->index('assignment_level');
         });
+        DB::statement("
+        ALTER TABLE complaint_assignments
+         ADD CONSTRAINT complaint_assignments_level_check
+         CHECK (assignment_level IN ('barangay', 'lgu'))
+        ");
     }
+
 
     public function down(): void
     {

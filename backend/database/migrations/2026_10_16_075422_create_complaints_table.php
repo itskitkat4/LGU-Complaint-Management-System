@@ -3,6 +3,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -19,13 +20,8 @@ return new class extends Migration
             $table->string('title');
             $table->text('description');
 
-            // low, medium, high, urgent
             $table->string('priority')->default('medium');
-
-            // Initial complaint status
             $table->string('status')->default('submitted');
-
-            // barangay or lgu decided during review
             $table->string('resolution_level')->nullable();
 
             $table->text('rejection_reason')->nullable();
@@ -53,6 +49,47 @@ return new class extends Migration
             $table->index('status');
             $table->index('created_at');
         });
+
+        DB::statement("
+            ALTER TABLE complaints
+            ADD CONSTRAINT complaints_status_check
+            CHECK (status IN (
+                'submitted',
+                'under_review',
+                'assigned',
+                'in_progress',
+                'resolved',
+                'closed',
+                'rejected'
+            ))
+        ");
+
+        DB::statement("
+            ALTER TABLE complaints
+            ADD CONSTRAINT complaints_priority_check
+            CHECK (priority IN ('low', 'medium', 'high', 'urgent'))
+        ");
+
+        DB::statement("
+            ALTER TABLE complaints
+            ADD CONSTRAINT complaints_resolution_level_check
+            CHECK (
+                resolution_level IS NULL
+                OR resolution_level IN ('barangay', 'lgu')
+            )
+        ");
+
+        DB::statement("
+            ALTER TABLE complaints
+            ADD CONSTRAINT complaints_rejection_reason_check
+            CHECK (
+                status <> 'rejected'
+                OR (
+                    rejection_reason IS NOT NULL
+                    AND LENGTH(TRIM(rejection_reason)) > 0
+                )
+            )
+        ");
     }
 
     public function down(): void

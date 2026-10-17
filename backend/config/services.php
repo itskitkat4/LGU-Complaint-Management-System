@@ -13,6 +13,10 @@ return [
     | a conventional file to locate the various service credentials.
     |
     */
+    'supabase' => [
+        'url' => env('VITE_SUPABASE_URL'),
+        'key' => env('VITE_SUPABASE_PUBLISHABLE_KEY'),
+    ],
 
     'postmark' => [
         'key' => env('POSTMARK_API_KEY'),
