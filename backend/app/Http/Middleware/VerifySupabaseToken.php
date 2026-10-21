@@ -21,7 +21,7 @@ class VerifySupabaseToken
         }
 
         $url = trim(config('services.supabase.url'), '/');
-        $key = config('services.supabase.key');
+        $key = config('services.supabase.publishable_key');
 
         if (! $url || ! $key) {
             return response () ->json([
@@ -61,3 +61,4 @@ class VerifySupabaseToken
         return $next($request);
     }
 }
+

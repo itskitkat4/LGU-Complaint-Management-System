@@ -13,10 +13,17 @@ return [
     | a conventional file to locate the various service credentials.
     |
     */
+
     'supabase' => [
-        'url' => env('VITE_SUPABASE_URL'),
-        'key' => env('VITE_SUPABASE_PUBLISHABLE_KEY'),
+        'url' => env('SUPABASE_URL'),
+        'publishable_key' => env('SUPABASE_PUBLISHABLE_KEY'),
+        'secret_key' => env('SUPABASE_SECRET_KEY'),
+        'storage_bucket' => env(
+            'SUPABASE_STORAGE_BUCKET',
+            'complaint-attachments'
+        ),
     ],
+
 
     'postmark' => [
         'key' => env('POSTMARK_API_KEY'),
