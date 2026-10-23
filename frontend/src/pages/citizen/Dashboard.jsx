@@ -4,7 +4,7 @@ import { supabase } from "../../lib/supabase";
 import { getCitizenProfile } from "../../lib/api";
 
 const navigation = [
-  { label: "Overview", short: "Overview", icon: "grid", path: "/citizen/dashboard" },
+  { label: "Overview", short: "Overvieww", icon: "grid", path: "/citizen/dashboard" },
   { label: "My Complaints", short: "Complaints", icon: "file", path: "/citizen/complaints" },
   { label: "Submit Complaint", short: "Submit", icon: "plus", path: "/citizen/complaints/new" },
 ];
