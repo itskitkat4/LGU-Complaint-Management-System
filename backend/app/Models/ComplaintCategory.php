@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 class ComplaintCategory extends Model
 {
 
+    use HasUlids;
     //Laravel define complaint_categories table to be used in the model
     protected $table = 'complaint_categories';
 

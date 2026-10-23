@@ -1,10 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import tagoloanSeal from "../../assets/tagoloan-seal.png";
+import tagoloanSeal from "../../assets/System_Logo.png";
 
-/* ------------------------------------------------------------------ */
-/* Content                                                             */
-/* ------------------------------------------------------------------ */
 
 const features = [
   {
@@ -332,11 +329,7 @@ function Landing() {
 
   return (
     <div className="min-h-screen scroll-smooth bg-white font-sans text-slate-900 antialiased">
-      {/* Top bar: official government-style strip */}
-      <div className="bg-emerald-950 text-emerald-50">
-        <div className={`${container} flex items-center gap-2 py-2 text-xs`}>
-        </div>
-      </div>
+
 
       {/* Navigation */}
       <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/90 backdrop-blur">
