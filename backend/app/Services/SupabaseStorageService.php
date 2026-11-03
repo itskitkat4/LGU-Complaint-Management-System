@@ -97,10 +97,7 @@ class SupabaseStorageService
     }
 
     /**
-     * Deletes a file from Supabase Storage.
-     *
-     * $path = the existing file path inside the bucket
-     *
+     * Deletes a file from Supabase Storage. $path = the existing file path inside the bucket 
      * void means this method does not return a value.
      */
     public function delete(string $path): void
@@ -133,8 +130,8 @@ class SupabaseStorageService
             'apikey' => $secretKey,
 
         ])->delete(
-            "{$baseUrl}/storage/v1/object/{$encodedBucket}/{$encodedPath}"
-        );
+                "{$baseUrl}/storage/v1/object/{$encodedBucket}/{$encodedPath}"
+            );
 
         // Check whether Supabase rejected the delete request.
         if ($response->failed()) {
@@ -147,5 +144,49 @@ class SupabaseStorageService
         }
 
         // If no exception was thrown, the delete request succeeded.
+    }
+    public function createSignedUrl(
+        string $path,
+        int $expiresIn = 300
+    ): string {
+        //check if the supabase complete setting exists
+        $baseUrl = rtrim(config('services.supabase.url'), '/');
+
+        $secretKey = config('services.supabase.secret_key');
+        $bucket = config('services.supabase.storage_bucket');
+
+        if (!$baseUrl || !$secretKey || !$bucket) {
+            throw new RuntimeException('Supabase is not configured');
+        }
+        //check file path, encode raw url to fix URL
+        $encodedBucket = rawurlencode($bucket);
+        $encodedPath = implode('/', array_map('rawurlencode', explode('/', $path)));
+
+        $response = Http::withHeaders([
+            'apikey' => $secretKey,
+        ])->post("{$baseUrl}/storage/v1/object/sign/{$encodedBucket}/{$encodedPath}",
+            [
+                'expiresIn' => $expiresIn,
+            ]);
+            
+        if ($response->failed()) {
+            throw new RuntimeException(
+                'Unable to generate a signed attachment URL. HTTP status: ' .
+                $response->status()
+            );
+        }
+            
+        $signedpath = $response->json('signedURL');
+
+        if (!is_string($signedpath) || $signedpath === '') {
+            throw new RuntimeException('Supabase does not return a signed URL.');
+        }
+
+        // Supabase can return either a relative or absolute signed URL.
+        if (str_starts_with($signedpath, '/')) {
+            return $baseUrl . '/storage/v1' . $signedpath;
+        }
+
+        return $signedpath;
     }
 }

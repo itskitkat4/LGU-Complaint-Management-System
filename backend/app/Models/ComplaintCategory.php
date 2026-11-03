@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Concerns\HasUlids;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 
 class ComplaintCategory extends Model
 {
 
+    use HasUuids;
     //Laravel define complaint_categories table to be used in the model
     protected $table = 'complaint_categories';
 

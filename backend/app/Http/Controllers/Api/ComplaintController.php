@@ -1,57 +1,150 @@
 <?php
-// Defines the namespace for API controllers.
 namespace App\Http\Controllers\Api;
-
-// Base Laravel controller.
 use App\Http\Controllers\Controller;
-
-// Models used to access database tables.
 use App\Models\Complaint;
 use App\Models\ComplaintAttachment;
 use App\Models\ComplaintUpdate;
 use App\Models\Profile;
-
-// Service responsible for uploading and deleting Supabase files.
 use App\Services\SupabaseStorageService;
-
-// Handles incoming HTTP requests.
 use Illuminate\Http\Request;
-
-// Allows database operations to run inside a transaction.
 use Illuminate\Support\Facades\DB;
-
-// Writes errors to Laravel's log file.
 use Illuminate\Support\Facades\Log;
-
-// Generates UUIDs for complaint IDs and file names.
 use Illuminate\Support\Str;
-
-// Adds database rules to Laravel validation.
 use Illuminate\Validation\Rule;
-
-// Catches different types of PHP errors and exceptions.
 use Throwable;
 
 class ComplaintController extends Controller
 {
-    /**
-     * Creates a new complaint submitted by a citizen.
-     */
-    public function store(
-        Request $request,
-        SupabaseStorageService $storage
-    ) {
+
+    //* Display a paginated list of complaints submitted by the authenticated citizen.
+    public function index(Request $request)
+    {
+        $user = $request->attributes->get('supabase_user');
+
+        if (!$user || empty($user['id'])) {
+            return response()->json([
+                'message' => 'Authentication is required',
+            ], 401);
+        }
+
+        $profile = Profile::find($user['id']);
+
+        if (!$profile || $profile->role !== 'citizen') {
+            return response()->json([
+                'message' => 'Only citizen can access their complaint history',
+            ], 403);
+        }
+
+        $complaints = Complaint::query()
+            ->with(
+                'category:id,name',
+                'barangay:id,name',
+                'attachments:id,complaint_id,file_name,mime_type,file_size,resolution_id',
+            )
+            ->where('citizen_id', $profile->id)
+            ->orderByDesc('created_at')
+            ->paginate(10);
+
+        return response()->json([
+            'message' => 'Complaint history is retrieve',
+            'data' => $complaints->items(),
+
+            'pagination' => [
+                'current_page' => $complaints->currentPage(),
+                'last_page' => $complaints->lastPage(),
+                'per_page' => $complaints->perPage(),
+                'total' => $complaints->total(),
+            ]
+        ]);
+    }
+
+    //*review who can see the uploaded photo
+
+
+    public function review(Request $request, string $complaintId)
+    {
+        $user = $request->attributes->get('supabase_user');
+
+        if (!$user || empty($user['id'])) {
+            return response()->json([
+                'message' => 'Authenticated user information is missing.',
+            ], 401);
+        }
+
+        $profile = Profile::find($user['id']);
+
+        if (!$profile || $profile->role !== 'LGU-Staff') {
+            return response()->json([
+                'message' => 'Only LGU-Staff can review complaints.',
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'decision' => [
+                'required',
+                Rule::in(['accepted', 'rejected']),
+            ],
+            'rejection_reason' => [
+                'required_if:decision,rejected',
+                'nullable',
+                'string',
+                'max:100',
+            ],
+        ]);
+
+        $complaint = Complaint::find($complaintId);
+
+        if (!$complaint) {
+            return response()->json([
+                'message' => 'Complaint not found.',
+            ], 404);
+        }
+
+        if ($complaint->status !== 'submitted') {
+            return response()->json([
+                'message' => 'Only submitted complaints can be reviewed.',
+            ], 422);
+        }
+
+        $newStatus = $validated['decision'] === 'accepted'
+            ? 'under_review'
+            : 'rejected';
+
+        DB::transaction(function () use ($complaint, $profile, $validated, $newStatus) {
+            $oldStatus = $complaint->status;
+
+            $complaint->status = $newStatus;
+
+            $complaint->rejection_reason = $newStatus === 'rejected'
+                ? $validated['rejection_reason']
+                : null;
+
+            $complaint->save();
+
+            ComplaintUpdate::create([
+                'complaint_id' => $complaint->id,
+                'updated_by' => $profile->id,
+                'old_status' => $oldStatus,
+                'new_status' => $newStatus,
+                'comment' => $newStatus === 'rejected'
+                    ? $validated['rejection_reason']
+                    : 'Complaint accepted by LGU-Staff.',
+            ]);
+        });
+
+        return response()->json([
+            'message' => 'Complaint reviewed successfully.',
+            'complaint' => $complaint->fresh(),
+        ]);
+    }
+
+    public function store(Request $request, SupabaseStorageService $storage)
+    {
         // Get the authenticated Supabase user.
-        // VerifySupabaseToken middleware must set this attribute first.
         $user = $request->attributes->get('supabase_user');
 
         // Make sure the authenticated user has an ID and email.
-        if (
-            !$user ||
-            empty($user['id']) ||
-            empty($user['email'])
-        ) {
-            // Return HTTP 401 if user information is missing.
+        if (!$user || empty($user['id']) || empty($user['email'])) {
             return response()->json([
                 'message' => 'Authenticated user information is missing.',
             ], 401);
@@ -172,12 +265,7 @@ class ComplaintController extends Controller
          */
         try {
             // Run the database operations inside one transaction.
-            $complaint = DB::transaction(function () use (
-                $profile,
-                $validated,
-                $uploadedFiles,
-                $complaintId
-            ) {
+            $complaint = DB::transaction(function () use ($profile, $validated, $uploadedFiles, $complaintId) {
 
                 // Create the main complaint record.
                 $complaint = Complaint::create([

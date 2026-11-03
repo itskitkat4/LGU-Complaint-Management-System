@@ -50,7 +50,7 @@ class VerifySupabaseToken
         }
         $user = $response->json();
 
-        if (! is_array($user) || empty($user['id'])) {
+        if (!is_array($user) || empty($user['id'])) {
             return response()->json([
                 'message' => 'Invalid authentication response from Supabase.',
             ], 401);
