@@ -25,7 +25,7 @@ class Complaint extends Model
         'priority',
         'status',
         'resolution_level',
-        'rejected_reason'
+        'rejection_reason'
     ];
 
     public function casts(): array {
@@ -38,7 +38,7 @@ class Complaint extends Model
         return $this->belongsTo(Profile::class, 'citizen_id');
     }
 
-
+//* route
     public function category(): BelongsTo{
         return $this->belongsTo(ComplaintCategory::class, 'category_id');
     }

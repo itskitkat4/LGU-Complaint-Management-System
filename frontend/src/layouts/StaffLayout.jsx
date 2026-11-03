@@ -1,3 +1,4 @@
+
 import { NavLink, Link } from "react-router-dom";
 
 const defaultLinks = [
@@ -35,7 +36,7 @@ function Icon({ name, className = "h-5 w-5" }) {
         <path d="M14 2v6h6M8 13h8M8 17h8" />
       </>
     ),
-    back: <path d="M19 12H5M11 6l-6 6 6 6" />,
+    back: <path d="M19 12H5m6-6-6 6 6 6" />,
     shield: (
       <>
         <path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z" />
@@ -50,16 +51,47 @@ function Icon({ name, className = "h-5 w-5" }) {
 function Logo({ subtitle }) {
   return (
     <span className="flex items-center gap-3">
-      <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-800 text-white">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-800 text-white">
         <Icon name="shield" className="h-5 w-5" />
       </span>
-      <span>
+
+      <span className="min-w-0">
         <span className="block text-base leading-5 font-bold tracking-tight text-slate-900">
-          Bantay<span className="font-semibold text-emerald-800">Serbisyo</span>
+          Bantay
+          <span className="font-semibold text-emerald-800">
+            Serbisyo
+          </span>
         </span>
-        <span className="block text-xs text-slate-500">{subtitle}</span>
+
+        <span className="block truncate text-xs text-slate-500">
+          {subtitle}
+        </span>
       </span>
     </span>
+  );
+}
+
+function SidebarLink({ link }) {
+  const isDashboard = link.to.endsWith("/dashboard");
+
+  return (
+    <NavLink
+      to={link.to}
+      end={isDashboard}
+      className={({ isActive }) =>
+        `flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors ${focusRing} ${
+          isActive
+            ? "bg-emerald-50 text-emerald-900"
+            : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+        }`
+      }
+    >
+      {link.icon && (
+        <Icon name={link.icon} className="h-[18px] w-[18px] shrink-0" />
+      )}
+
+      <span className="truncate">{link.label}</span>
+    </NavLink>
   );
 }
 
@@ -74,40 +106,36 @@ export default function StaffLayout({
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 antialiased">
       <div className="flex min-h-screen">
-        {/* Sidebar (desktop) */}
+
+        {/* Desktop Sidebar */}
         <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-slate-200 bg-white lg:flex">
           <Link
             to="/"
-            className={`m-4 rounded-lg p-2 ${focusRing}`}
+            className={`m-4 rounded-xl p-2 ${focusRing}`}
             aria-label="BantaySerbisyo home"
           >
             <Logo subtitle={role} />
           </Link>
 
-          <nav aria-label="Main menu" className="mt-2 space-y-1 px-4">
+          <div className="px-5 pb-3 pt-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+              Main Menu
+            </p>
+          </div>
+
+          <nav
+            aria-label="Main menu"
+            className="space-y-1 px-4"
+          >
             {links.map((link) => (
-              <NavLink
-                key={link.to}
-                to={link.to}
-                end={isDashboard(link.to)}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${focusRing} ${
-                    isActive
-                      ? "bg-emerald-50 text-emerald-900"
-                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                  }`
-                }
-              >
-                {link.icon && <Icon name={link.icon} className="h-[18px] w-[18px]" />}
-                {link.label}
-              </NavLink>
+              <SidebarLink key={link.to} link={link} />
             ))}
           </nav>
 
           <div className="mt-auto border-t border-slate-100 p-4">
             <Link
               to="/"
-              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 ${focusRing}`}
+              className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 ${focusRing}`}
             >
               <Icon name="back" className="h-[18px] w-[18px]" />
               Back to home
@@ -115,39 +143,54 @@ export default function StaffLayout({
           </div>
         </aside>
 
-        <div className="min-w-0 flex-1 pb-20 lg:pb-0">
-          {/* Top bar */}
-          <header className="sticky top-0 z-20 flex h-16 items-center border-b border-slate-200 bg-white/90 px-5 backdrop-blur sm:px-8">
+        {/* Main Content */}
+        <div className="flex min-w-0 flex-1 flex-col pb-20 lg:pb-0">
+
+          {/* Topbar */}
+          <header className="sticky top-0 z-20 flex min-h-16 items-center border-b border-slate-200 bg-white/95 px-5 backdrop-blur sm:px-8">
+
+            {/* Mobile Logo */}
             <Link
               to="/"
-              className={`rounded-lg lg:hidden ${focusRing}`}
+              className={`rounded-xl lg:hidden ${focusRing}`}
               aria-label="BantaySerbisyo home"
             >
               <Logo subtitle={role} />
             </Link>
 
+            {/* Desktop Page Title */}
             <div className="hidden lg:block">
-              <p className="text-xs font-medium text-slate-500">{role}</p>
-              <h1 className="text-base leading-5 font-semibold text-slate-900">{title}</h1>
+              <p className="text-xs font-medium text-slate-500">
+                {role}
+              </p>
+
+              <h1 className="text-base font-semibold text-slate-900">
+                {title}
+              </h1>
             </div>
           </header>
 
-          <main className="mx-auto max-w-6xl space-y-8 p-5 sm:p-8">
-            {/* On mobile the title moves below the top bar so the logo stays visible */}
-            <h1 className="text-2xl font-semibold tracking-tight lg:hidden">{title}</h1>
+          {/* Page Content */}
+          <main className="mx-auto w-full max-w-6xl flex-1 p-5 sm:p-8">
+
+            {/* Mobile Page Title */}
+            <h1 className="mb-8 text-2xl font-bold tracking-tight text-slate-900 lg:hidden">
+              {title}
+            </h1>
 
             {children}
 
-            <footer className="border-t border-slate-200 py-5 text-center text-xs text-slate-500">
+            {/* Footer */}
+            <footer className="mt-10 border-t border-slate-200 py-5 text-center text-xs text-slate-500">
               © {new Date().getFullYear()} BantaySerbisyo · Municipality of Tagoloan
             </footer>
           </main>
         </div>
       </div>
 
-      {/* Bottom navigation (mobile / tablet) */}
+      {/* Mobile / Tablet Bottom Navigation */}
       <nav
-        aria-label="Main menu"
+        aria-label="Mobile main menu"
         className="fixed inset-x-0 bottom-0 z-30 flex border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
       >
         {links.map((link) => (
@@ -157,12 +200,17 @@ export default function StaffLayout({
             end={isDashboard(link.to)}
             className={({ isActive }) =>
               `flex min-w-0 flex-1 flex-col items-center gap-1 px-2 py-2.5 text-xs font-medium transition-colors ${focusRing} focus-visible:ring-inset ${
-                isActive ? "text-emerald-800" : "text-slate-500 hover:text-slate-900"
+                isActive
+                  ? "text-emerald-800"
+                  : "text-slate-500 hover:text-slate-900"
               }`
             }
           >
             <Icon name={link.icon || "file"} className="h-5 w-5" />
-            <span className="max-w-full truncate">{link.label}</span>
+
+            <span className="max-w-full truncate">
+              {link.label}
+            </span>
           </NavLink>
         ))}
       </nav>

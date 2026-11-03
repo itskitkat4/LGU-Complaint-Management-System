@@ -1,5 +1,5 @@
 import { useState } from "react";
-import StaffLayout from "../../layouts/StaffLayout";
+import AdminLayout from "../../layouts/AdminLayout";
 import { Icon, inputClass } from "../../components/ui";
 
 const initialUsers = [
@@ -35,7 +35,7 @@ export default function UserManagement() {
   });
 
   return (
-    <StaffLayout title="User Management" role="System Administrator">
+    <AdminLayout title="User Management" role="System Administrator">
       <div className="space-y-6">
         <div>
           <h2 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
@@ -160,6 +160,6 @@ export default function UserManagement() {
           to authorized backend endpoints.
         </p>
       </div>
-    </StaffLayout>
+    </AdminLayout>
   );
 }

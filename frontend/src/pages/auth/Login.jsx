@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import tagoloanSeal from "../../assets/System_Logo.png";
 import { supabase } from "../../lib/supabase";
-import { getCitizenProfile } from "../../lib/api";
+import { getAuthenticatedProfile } from "../../lib/api";
 
 const focusRing =
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2";
@@ -15,6 +15,14 @@ const benefits = [
     "Submit complaints with supporting evidence",
     "Follow every status update in one place",
     "Hear back from authorized personnel",
+];
+
+const personnelRoles = [
+    "System Administrator",
+    "LGU-Staff",
+    "Barangay_Head",
+    "Department_Head",
+    "Department_Personnel",
 ];
 
 function Field({ id, label, children }) {
@@ -50,7 +58,6 @@ function PasswordInput({
                 value={value}
                 onChange={onChange}
                 autoComplete={autoComplete}
-                minLength={8}
                 required
                 disabled={disabled}
                 className={`${inputClass} pr-16 disabled:cursor-not-allowed disabled:bg-slate-100`}
@@ -73,79 +80,118 @@ function PasswordInput({
 function Login() {
     const navigate = useNavigate();
 
-    const [isRegister, setIsRegister] = useState(false);
-    const [fullName, setFullName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-    const [confirmPassword, setConfirmPassword] = useState("");
     const [notice, setNotice] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
 
-    // Verify the Supabase session through the Laravel API.
-    async function finishLogin() {
-        const result = await getCitizenProfile();
+    // Get the authenticated user's profile and redirect by role.
+    async function finishLogin(expectedAccountType) {
+        const result = await getAuthenticatedProfile();
 
         if (!result?.profile) {
-            throw new Error(
-                "Your citizen profile could not be retrieved."
-            );
+            throw new Error("Your user profile could not be retrieved.");
         }
 
-        if (result.profile.role !== "citizen") {
-            await supabase.auth.signOut();
+        const role = result.profile.role;
 
+        // Citizens must use Google authentication.
+        if (expectedAccountType === "citizen" && role !== "citizen") {
             throw new Error(
                 "This account is not registered as a citizen account."
             );
         }
 
-        navigate("/citizen/dashboard", { replace: true });
+        // Internal accounts must have an authorized personnel role.
+        if (
+            expectedAccountType === "personnel" &&
+            !personnelRoles.includes(role)
+        ) {
+            throw new Error(
+                "This account is not authorized for personnel access."
+            );
+        }
+
+        switch (role) {
+            case "citizen":
+                navigate("/citizen/dashboard", { replace: true });
+                break;
+
+            case "System Administrator":
+                navigate("/admin/dashboard", { replace: true });
+                break;
+
+            case "LGU-Staff":
+                navigate("/staff/dashboard", { replace: true });
+                break;
+
+            case "Barangay_Head":
+                navigate("/barangay/dashboard", { replace: true });
+                break;
+
+            case "Department_Head":
+                navigate("/department/dashboard", { replace: true });
+                break;
+
+            case "Department_Personnel":
+                navigate("/personnel/dashboard", { replace: true });
+                break;
+
+            default:
+                throw new Error("Your account has an unrecognized role.");
+        }
     }
 
-    // Check whether the user already has an authenticated session.
+    // Complete Google OAuth login after returning to the application.
     useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const isGoogleCallback = params.get("auth") === "google";
+
+        if (!isGoogleCallback) return;
+
         let active = true;
 
-        async function checkExistingSession() {
+        async function verifyGoogleLogin() {
             try {
+                setIsLoading(true);
+
                 const {
                     data: { session },
                     error,
                 } = await supabase.auth.getSession();
 
-                if (!active) return;
-
                 if (error) throw error;
 
-                if (!session?.access_token) return;
+                if (!session?.access_token) {
+                    throw new Error("Google login was not completed.");
+                }
 
-                setIsLoading(true);
-
-                await finishLogin();
+                await finishLogin("citizen");
             } catch (error) {
                 if (active) {
                     setNotice({
                         type: "error",
                         text:
                             error.message ||
-                            "Unable to verify your citizen profile.",
+                            "Unable to verify your citizen account.",
                     });
                 }
             } finally {
                 if (active) {
                     setIsLoading(false);
+                    window.history.replaceState({}, "", "/login");
                 }
             }
         }
 
-        checkExistingSession();
+        verifyGoogleLogin();
 
         return () => {
             active = false;
         };
     }, []);
 
-    // Sign in using Google OAuth.
+    // Citizen login through Google OAuth.
     async function handleGoogleLogin() {
         if (isLoading) return;
 
@@ -156,17 +202,15 @@ function Login() {
         });
 
         try {
-
             const { error } = await supabase.auth.signInWithOAuth({
                 provider: "google",
                 options: {
-                    redirectTo: `${window.location.origin}/login`,
+                    redirectTo: `${window.location.origin}/login?auth=google`,
                     queryParams: {
                         prompt: "select_account",
                     },
                 },
             });
-
 
             if (error) throw error;
         } catch (error) {
@@ -174,73 +218,31 @@ function Login() {
                 type: "error",
                 text: error.message || "Unable to sign in with Google.",
             });
+
             setIsLoading(false);
         }
     }
 
-    // Register an account or sign in using email and password.
+    // Personnel login through email and password.
     async function handleSubmit(event) {
         event.preventDefault();
 
         if (isLoading) return;
 
-        setNotice(null);
-
         const normalizedEmail = email.trim().toLowerCase();
 
-        if (isRegister && !fullName.trim()) {
+        if (!normalizedEmail || !password) {
             setNotice({
                 type: "error",
-                text: "Please enter your full name.",
+                text: "Please enter your email address and password.",
             });
             return;
         }
 
-        if (isRegister && password !== confirmPassword) {
-            setNotice({
-                type: "error",
-                text: "Your passwords do not match.",
-            });
-            return;
-        }
-
+        setNotice(null);
         setIsLoading(true);
 
         try {
-            if (isRegister) {
-                const { data, error } = await supabase.auth.signUp({
-                    email: normalizedEmail,
-                    password,
-                    options: {
-                        data: {
-                            full_name: fullName.trim(),
-                        },
-                    },
-                });
-
-                if (error) throw error;
-
-                if (data.session) {
-                    setNotice({
-                        type: "info",
-                        text:
-                            "Your account was created successfully. You can now sign in.",
-                    });
-
-                    setIsRegister(false);
-                    setPassword("");
-                    setConfirmPassword("");
-                } else {
-                    setNotice({
-                        type: "info",
-                        text:
-                            "Registration submitted. Check your email for a confirmation link before signing in.",
-                    });
-                }
-
-                return;
-            }
-
             const { error } = await supabase.auth.signInWithPassword({
                 email: normalizedEmail,
                 password,
@@ -248,7 +250,7 @@ function Login() {
 
             if (error) throw error;
 
-            await finishLogin();
+            await finishLogin("personnel");
         } catch (error) {
             setNotice({
                 type: "error",
@@ -304,16 +306,6 @@ function Login() {
         } finally {
             setIsLoading(false);
         }
-    }
-
-    // Switch between login and registration.
-    function toggleMode() {
-        setIsRegister((current) => !current);
-        setFullName("");
-        setEmail("");
-        setPassword("");
-        setConfirmPassword("");
-        setNotice(null);
     }
 
     return (
@@ -431,16 +423,38 @@ function Login() {
                             id="auth-title"
                             className="text-3xl font-semibold tracking-tight text-slate-900"
                         >
-                            {isRegister
-                                ? "Create your account"
-                                : "Welcome back"}
+                            Welcome to BantaySerbisyo
                         </h1>
 
                         <p className="mt-2 text-sm leading-6 text-slate-600">
-                            {isRegister
-                                ? "Create an account to submit and track complaints."
-                                : "Log in to submit complaints and track your concerns."}
+                            Sign in to access your account and continue.
                         </p>
+
+                        {notice && (
+                            <div
+                                role={
+                                    notice.type === "error"
+                                        ? "alert"
+                                        : "status"
+                                }
+                                className={`mt-6 flex items-start gap-3 rounded-md border px-4 py-3 text-sm leading-6 ${
+                                    notice.type === "error"
+                                        ? "border-red-200 bg-red-50 text-red-800"
+                                        : "border-emerald-200 bg-emerald-50 text-emerald-900"
+                                }`}
+                            >
+                                <p className="flex-1">{notice.text}</p>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setNotice(null)}
+                                    aria-label="Dismiss message"
+                                    className={`-mr-1 rounded p-0.5 opacity-60 transition-opacity hover:opacity-100 ${focusRing}`}
+                                >
+                                    <span aria-hidden="true">×</span>
+                                </button>
+                            </div>
+                        )}
 
                         <button
                             type="button"
@@ -478,60 +492,18 @@ function Login() {
 
                         <div className="my-7 flex items-center gap-4 text-xs text-slate-500">
                             <span className="h-px flex-1 bg-slate-200" />
-                            or use your email
+                            OR
                             <span className="h-px flex-1 bg-slate-200" />
                         </div>
 
-                        {notice && (
-                            <div
-                                role={
-                                    notice.type === "error"
-                                        ? "alert"
-                                        : "status"
-                                }
-                                className={`mb-5 flex items-start gap-3 rounded-md border px-4 py-3 text-sm leading-6 ${notice.type === "error"
-                                        ? "border-red-200 bg-red-50 text-red-800"
-                                        : "border-emerald-200 bg-emerald-50 text-emerald-900"
-                                    }`}
-                            >
-                                <p className="flex-1">{notice.text}</p>
-
-                                <button
-                                    type="button"
-                                    onClick={() => setNotice(null)}
-                                    aria-label="Dismiss message"
-                                    className={`-mr-1 rounded p-0.5 opacity-60 transition-opacity hover:opacity-100 ${focusRing}`}
-                                >
-                                    <span aria-hidden="true">×</span>
-                                </button>
-                            </div>
-                        )}
+                        <p className="mb-5 text-sm font-medium text-slate-700">
+                            LGU Personnel / Administrator
+                        </p>
 
                         <form
                             onSubmit={handleSubmit}
                             className="space-y-5"
                         >
-                            {isRegister && (
-                                <Field
-                                    id="fullName"
-                                    label="Full name"
-                                >
-                                    <input
-                                        id="fullName"
-                                        type="text"
-                                        placeholder="Juan Dela Cruz"
-                                        value={fullName}
-                                        onChange={(event) =>
-                                            setFullName(event.target.value)
-                                        }
-                                        autoComplete="name"
-                                        required
-                                        disabled={isLoading}
-                                        className={inputClass}
-                                    />
-                                </Field>
-                            )}
-
                             <Field
                                 id="email"
                                 label="Email address"
@@ -544,7 +516,7 @@ function Login() {
                                     onChange={(event) =>
                                         setEmail(event.target.value)
                                     }
-                                    autoComplete="email"
+                                    autoComplete="username"
                                     required
                                     disabled={isLoading}
                                     className={inputClass}
@@ -561,89 +533,35 @@ function Login() {
                                     onChange={(event) =>
                                         setPassword(event.target.value)
                                     }
-                                    placeholder={
-                                        isRegister
-                                            ? "At least 8 characters"
-                                            : "Enter your password"
-                                    }
-                                    autoComplete={
-                                        isRegister
-                                            ? "new-password"
-                                            : "current-password"
-                                    }
+                                    placeholder="Enter your password"
+                                    autoComplete="current-password"
                                     disabled={isLoading}
                                 />
                             </Field>
 
-                            {isRegister && (
-                                <Field
-                                    id="confirmPassword"
-                                    label="Confirm password"
+                            <div className="flex justify-end text-sm">
+                                <button
+                                    type="button"
+                                    onClick={handleForgotPassword}
+                                    disabled={isLoading}
+                                    className={`rounded font-semibold text-emerald-800 hover:underline disabled:opacity-50 ${focusRing}`}
                                 >
-                                    <PasswordInput
-                                        id="confirmPassword"
-                                        value={confirmPassword}
-                                        onChange={(event) =>
-                                            setConfirmPassword(
-                                                event.target.value
-                                            )
-                                        }
-                                        placeholder="Re-enter your password"
-                                        autoComplete="new-password"
-                                        disabled={isLoading}
-                                    />
-                                </Field>
-                            )}
-
-                            {!isRegister && (
-                                <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-                                    <label className="flex items-center gap-2 text-slate-600">
-                                        <input
-                                            type="checkbox"
-                                            className="h-4 w-4 rounded border-slate-300 accent-emerald-800"
-                                        />
-                                        Remember me
-                                    </label>
-
-                                    <button
-                                        type="button"
-                                        onClick={handleForgotPassword}
-                                        disabled={isLoading}
-                                        className={`rounded font-semibold text-emerald-800 hover:underline disabled:opacity-50 ${focusRing}`}
-                                    >
-                                        Forgot password?
-                                    </button>
-                                </div>
-                            )}
+                                    Forgot password?
+                                </button>
+                            </div>
 
                             <button
                                 type="submit"
                                 disabled={isLoading}
                                 className={`flex min-h-12 w-full items-center justify-center rounded-md bg-emerald-800 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-900 disabled:cursor-not-allowed disabled:opacity-60 ${focusRing}`}
                             >
-                                {isLoading
-                                    ? "Please wait..."
-                                    : isRegister
-                                        ? "Create account"
-                                        : "Log in"}
+                                {isLoading ? "Please wait..." : "Log in"}
                             </button>
                         </form>
 
-                        <p className="mt-8 text-center text-sm text-slate-600">
-                            {isRegister
-                                ? "Already have an account?"
-                                : "New to BantaySerbisyo?"}{" "}
-
-                            <button
-                                type="button"
-                                onClick={toggleMode}
-                                disabled={isLoading}
-                                className={`rounded font-semibold text-emerald-800 hover:underline disabled:opacity-50 ${focusRing}`}
-                            >
-                                {isRegister
-                                    ? "Log in"
-                                    : "Create an account"}
-                            </button>
+                        <p className="mt-8 text-center text-xs leading-6 text-slate-500">
+                            Internal accounts are created and managed by the
+                            System Administrator.
                         </p>
                     </section>
                 </main>
