@@ -70,7 +70,8 @@ The Barangay Head may:
 - Handle barangay-level complaints within their authority.
 - Update progress on complaints they are authorized to handle.
 - Submit resolution details and supporting evidence for review.
-- Escalate complaints that require LGU-level handling.
+- Escalate complaints that exceed barangay authority to the appropriate LGU department.
+- Provide an escalation reason and any relevant complaint details.
 
 The Barangay Head must not access complaints belonging to another barangay unless explicitly authorized by the system's approved access rules.
 
@@ -100,6 +101,8 @@ The Department Head may:
 - Reassign personnel when necessary and authorized.
 - Monitor departmental complaint progress.
 - Review incomplete assignments and coordinate required follow-up.
+- Review escalation requests submitted by Barangay Heads, accept them for departmental handling, or redirect them to the appropriate LGU department with a recorded reason.
+- Escalate matters beyond the department's authority to the designated higher authority, coordinating supporting documents manually outside the system.
 
 Every assignment or reassignment must identify the responsible personnel member and the user who made the assignment.
 
@@ -182,6 +185,30 @@ The record should include, where applicable:
 
 A transfer or reassignment does not automatically mean that the complaint is resolved or that its processing work has restarted.
 
+### 5.5 Escalation Workflow
+
+Escalation is used when a complaint requires authority or resources beyond the current handling unit. An escalation is recorded as a workflow event; it does not by itself change the complaint's processing status.
+
+#### Barangay Head to LGU Department
+
+1. The Barangay Head determines that the complaint cannot be handled within the barangay's authority or resources.
+2. The Barangay Head submits an escalation request to the appropriate LGU department, including the reason and relevant complaint details.
+3. The system records the requesting Barangay Head, originating barangay, destination department, reason, and date and time.
+4. The system notifies the Department Head of the incoming escalation request.
+5. The Department Head reviews the request. They accept it for departmental handling or redirect it to another appropriate department, recording the decision and any reason.
+6. When accepted, the Department Head assigns the complaint to suitable Department Personnel, who handle it under the LGU-level complaint workflow in Section 5.3.
+7. The Barangay Head can see the recorded decision and subsequent complaint progress according to their access permissions.
+
+#### Department Head to Higher Authority
+
+1. The Department Head determines that the complaint requires authority, coordination, or resources beyond the department's remit.
+2. The Department Head records an escalation to the designated higher authority, including the reason, destination, and date and time.
+3. The Department Head sends supporting documents and evidence to that authority manually, outside the system. The higher authority does not need a system account for this workflow.
+4. The system records the escalation, but does not send an in-system notification to the higher authority.
+5. When a response is received, the Department Head records the outcome or decision in the complaint history and coordinates any next action.
+
+The specific higher authority (for example, the Municipal Administrator or Mayor's Office) must be designated by the LGU. Escalating a complaint does not automatically resolve it or change its processing status.
+
 ## 6. Resolution Approval Workflow
 
 The responsible handler must provide a resolution description explaining what action was taken and the outcome.
@@ -236,6 +263,8 @@ The following items require formal review before the rules are considered final:
 - [ ] Confirm that `Transferred` is an assignment or workflow event rather than a complaint status.
 - [ ] Confirm that the Barangay Head handles barangay-level complaints directly, with no separate Barangay Personnel role.
 - [ ] Confirm that the Department Head assigns LGU-level complaints to Department Personnel.
+- [ ] Confirm that Department Heads review Barangay Head escalation requests and that the system notifies the receiving Department Head.
+- [ ] Designate the higher authority for Department Head escalations and confirm that supporting documents are handled manually outside the system.
 - [ ] Confirm that LGU-Staff approves resolutions for both barangay-level and LGU-level complaints.
 - [ ] Review the status transitions and required validation rules.
 - [ ] Compare the approved workflow against the database schema and API contract.

@@ -232,7 +232,47 @@ A complaint may have multiple resolution records because LGU-Staff may return a 
 
 The final table definition, constraints, and indexes must be confirmed against the approved ERD before migration.
 
-## 4. Proposed Evidence Relationship
+## 4. Proposed New Table: `complaint_escalations`
+
+**Purpose:** Stores each escalation request, its destination, review decision where applicable, and any outcome received later. A complaint may have multiple escalation records over its lifetime. Escalations are workflow events and do not replace the complaint's status or assignment history.
+
+| Column | Proposed type | Purpose |
+|---|---|---|
+| `id` | UUID | Primary key |
+| `complaint_id` | UUID | Foreign key to `complaints.id` |
+| `escalation_type` | VARCHAR(40) | `barangay_to_department` or `department_to_higher_authority` |
+| `requested_by` | UUID | Foreign key to `profiles.id`; Barangay Head or Department Head who submitted it |
+| `origin_barangay_id` | UUID, nullable | Foreign key to `barangays.id`; set for a Barangay Head request |
+| `origin_department_id` | UUID, nullable | Foreign key to `departments.id`; set for a Department Head request |
+| `destination_department_id` | UUID, nullable | Foreign key to `departments.id`; required for a Barangay Head request and optional when redirecting it |
+| `higher_authority_name` | VARCHAR(255), nullable | Name of the external higher authority for a Department Head request; not a system user |
+| `reason` | TEXT | Why the complaint needs escalation |
+| `supporting_details` | TEXT, nullable | Additional context included with the request; documents for higher authority are sent manually |
+| `request_status` | VARCHAR(30) | `pending`, `accepted`, `redirected`, or `completed` |
+| `reviewed_by` | UUID, nullable | Foreign key to `profiles.id`; Department Head reviewing a Barangay Head request |
+| `review_decision` | VARCHAR(30), nullable | `accepted` or `redirected`; used for Barangay Head requests |
+| `review_comment` | TEXT, nullable | Explanation for the review decision or redirect |
+| `reviewed_at` | TIMESTAMP, nullable | Time the Department Head reviewed the request |
+| `outcome_notes` | TEXT, nullable | Response or outcome recorded after manual higher-authority coordination, or later escalation outcome |
+| `outcome_recorded_by` | UUID, nullable | Foreign key to `profiles.id`; staff member recording the outcome |
+| `outcome_recorded_at` | TIMESTAMP, nullable | Time the outcome was recorded |
+| `created_at` | TIMESTAMP | Request creation time |
+| `updated_at` | TIMESTAMP | Last update time |
+
+### Relationships and rules
+
+- One complaint can have many escalation records; each escalation belongs to one complaint.
+- Each escalation is submitted by one profile. `origin_barangay_id` and `origin_department_id` preserve the organizational unit at the time of the request.
+- A `barangay_to_department` request must have an origin barangay and destination department. It starts as `pending`; the receiving Department Head reviews it, then records `accepted` or `redirected` with reviewer and timestamp. A redirect must identify the new destination department and include a reason.
+- A `department_to_higher_authority` request must have an origin department and `higher_authority_name`. It does not require a higher-authority account, in-system notification, or review fields. Supporting documents are delivered manually; the Department Head can record the resulting outcome in `outcome_notes`.
+- `requested_by`, `reviewed_by`, and `outcome_recorded_by` reference `profiles.id` and must be authorized for the corresponding action. Preserve escalation records; do not delete or overwrite them when a complaint is reassigned or escalated again.
+- Record each escalation request, decision, redirect, and outcome with timestamps. Use a transaction when a decision also changes the complaint's assignment.
+- Add indexes on `complaint_id`, `request_status`, and the destination department used for pending requests. Consider a partial index for pending Barangay Head requests if supported by the database.
+- Enforce type-dependent required fields, valid status transitions, and role authorization in Laravel. Add database `CHECK` constraints for stable enum-like values and required field combinations where practical.
+
+The system should notify the receiving Department Head when a Barangay Head request is submitted. This table stores the escalation workflow; notification delivery may use the application's notification mechanism and does not require a higher-authority account or notification record in this table.
+
+## 5. Proposed Evidence Relationship
 
 The existing `complaint_attachments` table should remain the primary file-metadata table.
 
@@ -251,7 +291,7 @@ Two designs are possible:
 
 The recommended initial design is Option A, provided each attachment belongs to at most one resolution submission. This remains subject to team review.
 
-## 5. Proposed Complaint Status Lifecycle
+## 6. Proposed Complaint Status Lifecycle
 
 The proposed complaint statuses are:
 
@@ -279,7 +319,7 @@ The proposed complaint statuses are:
 
 Laravel must reject invalid or unauthorized transitions.
 
-## 6. Role and Record-Level Access
+## 7. Role and Record-Level Access
 
 | Role | Intended access |
 |---|---|
@@ -292,7 +332,7 @@ Laravel must reject invalid or unauthorized transitions.
 
 The backend must verify identity, role, organizational scope, and complaint-level permissions. Frontend route restrictions alone are insufficient.
 
-## 7. Integrity and Security Requirements
+## 8. Integrity and Security Requirements
 
 - Preserve existing records during schema changes.
 - Use foreign keys for relational integrity.
@@ -305,7 +345,7 @@ The backend must verify identity, role, organizational scope, and complaint-leve
 - Preserve assignment, status, resolution, and review history.
 - Review database constraints and indexes against actual query patterns before adding them.
 
-## 8. Existing Tables Versus Proposed Changes
+## 9. Existing Tables Versus Proposed Changes
 
 | Requirement | Design decision |
 |---|---|
@@ -319,16 +359,18 @@ The backend must verify identity, role, organizational scope, and complaint-leve
 | Assignment history | Reuse `complaint_assignments` |
 | Status history | Reuse `complaint_updates` |
 | Resolution submissions and decisions | Propose `complaint_resolutions` |
+| Escalation requests, review decisions, and outcomes | Propose `complaint_escalations` |
 | Citizen feedback | Reuse `feedback` |
 
 Additional transfer, notification, and audit tables are not included in this immediate schema-change proposal. Their need should be reviewed against the approved requirements before implementation.
 
-## 9. Review Checklist
+## 10. Review Checklist
 
 - [ ] Compare all documented columns and constraints with the actual Laravel migration files.
 - [ ] Confirm the proposed complaint statuses and transitions.
 - [ ] Confirm the role permissions and barangay/LGU routing rules.
 - [ ] Review the `complaint_resolutions` table design.
+- [ ] Review the `complaint_escalations` table design and role-specific field requirements.
 - [ ] Confirm how resolution evidence will be linked.
 - [ ] Confirm that assignment and status histories are preserved.
 - [ ] Review required indexes and constraints.
@@ -336,11 +378,11 @@ Additional transfer, notification, and audit tables are not included in this imm
 - [ ] Prepare minimal migrations only after approval.
 - [ ] Verify migrations without resetting or deleting existing data.
 
-## 10. Implementation Status
+## 11. Implementation Status
 
 **Current state:** Existing tables have been inspected. The proposed resolution-history design is documented for review.
 
-**Not yet implemented:** The `complaint_resolutions` table and the optional resolution-evidence relationship.
+**Not yet implemented:** The proposed `complaint_resolutions` and `complaint_escalations` tables and the optional resolution-evidence relationship.
 
 **Next task:** Finalize Task 2.1 and Task 2.2, then proceed to Task 2.3 — Create API Contract Documentation in `docs/api-contract.md`.
 
