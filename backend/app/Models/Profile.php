@@ -18,6 +18,11 @@ class Profile extends Model
         'role',
         'barangay_id',
         'department_id',    
+        'is_active',
+    ];
+
+    protected $casts = [
+        'is_active' => 'boolean',
     ];
 
     // Supabase provides UUIDs, so the ID is not auto-incrementing.

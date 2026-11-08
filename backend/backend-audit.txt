@@ -1,0 +1,2221 @@
+BACKEND SOURCE CODE AUDIT
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\routes\api.php ==========
+
+<?php
+
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
+use App\Http\Middleware\VerifySupabaseToken;
+use App\Http\Controllers\Api\CitizenProfileController;
+use App\Http\Controllers\Api\BarangayController;
+use App\Http\Controllers\Api\ComplaintCategoryController;
+use App\Http\Controllers\Api\ComplaintController;
+use App\Http\Controllers\Api\ComplaintAttachmentController;
+use App\Http\Controllers\Api\DepartmentController;
+use App\Models\Profile;
+
+Route::middleware(VerifySupabaseToken::class)->group(function () {
+Route::get('complaint-attachments/{attachmentId}/signed-url', [ComplaintAttachmentController::class, 'signedUrl']);
+
+
+    // Test the authenticated Supabase user.
+    Route::get('/auth/me', function (Request $request) {
+        $user = $request->attributes->get('supabase_user');
+
+        return response()->json([
+            'message' => 'Authenticated successfully.',
+            'user' => [
+                'id' => $user['id'] ?? null,
+                'email' => $user['email'] ?? null,
+            ],
+        ]);
+    });
+
+    Route::get('/auth/profile', function (Request $request) {
+        $user = $request->attributes->get('supabase_user');
+
+        $profile = Profile::find($user['id']);
+
+        if(!$profile) {
+            return response()->json([
+                'message' => 'User Profile Not Found',
+            ], 404);
+        }
+
+        return response()->json([
+            'message' => 'Profile Retrived Successfully',
+            'profile' => $profile,
+        ]);
+    });
+
+    //Department Routes
+    Route::get('/departments', [DepartmentController::class, 'index']);
+    Route::post('/departments', [DepartmentController::class, 'store']);
+    Route::put('/departments/{id}', [DepartmentController::class, 'update']);
+    Route::delete('/departments/{id}', [DepartmentController::class, 'delete']);
+
+    // Retrieve or create the citizen profile.
+    Route::get('/profile', [CitizenProfileController::class, 'showOrCreate']);
+    Route::put('/profile', [CitizenProfileController::class, 'update']);
+    Route::post('/complaints', [ComplaintController::class, 'store']);
+    Route::get('/complaints', [ComplaintController::class, 'index']);
+    Route::post('/complaints/{complaintId}/review', [ComplaintController::class, 'review']);
+});
+
+Route::get('/barangays', [BarangayController::class, 'index']);
+Route::get('/complaint-categories', [ComplaintCategoryController::class, 'index']);
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\bootstrap\app.php ==========
+<?php
+
+use Illuminate\Foundation\Application;
+use Illuminate\Foundation\Configuration\Exceptions;
+use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Request;
+
+return Application::configure(basePath: dirname(__DIR__))
+    ->withRouting(
+        web: __DIR__.'/../routes/web.php',
+        api: __DIR__.'/../routes/api.php',
+        commands: __DIR__.'/../routes/console.php',
+        health: '/up',
+    )
+    ->withMiddleware(function (Middleware $middleware): void {
+        //
+    })
+    ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->shouldRenderJsonWhen(
+            fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
+        );
+    })->create();
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\config\services.php ==========
+<?php
+
+return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | Third Party Services
+    |--------------------------------------------------------------------------
+    |
+    | This file is for storing the credentials for third party services such
+    | as Resend, Postmark, AWS, and more. This file provides the de facto
+    | location for this type of information, allowing packages to have
+    | a conventional file to locate the various service credentials.
+    |
+    */
+
+    'supabase' => [
+        'url' => env('SUPABASE_URL'),
+        'publishable_key' => env('SUPABASE_PUBLISHABLE_KEY'),
+        'secret_key' => env('SUPABASE_SECRET_KEY'),
+        'storage_bucket' => env(
+            'SUPABASE_STORAGE_BUCKET',
+            'complaint-attachments'
+        ),
+    ],
+
+
+    'postmark' => [
+        'key' => env('POSTMARK_API_KEY'),
+    ],
+
+    'resend' => [
+        'key' => env('RESEND_API_KEY'),
+    ],
+
+    'ses' => [
+        'key' => env('AWS_ACCESS_KEY_ID'),
+        'secret' => env('AWS_SECRET_ACCESS_KEY'),
+        'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
+    ],
+
+    'slack' => [
+        'notifications' => [
+            'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),
+            'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
+        ],
+    ],
+
+];
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\app\Http\Middleware\VerifySupabaseToken.php ==========
+<?php
+
+namespace App\Http\Middleware;
+
+use Closure;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
+use Symfony\Component\HttpFoundation\Response;
+
+class VerifySupabaseToken
+{
+    public function handle(Request $request, Closure $next): Response
+    {
+
+        $token = $request->bearerToken();
+
+        if (! $token) {
+            return response()
+            ->json(['message' => 'Unauthenticated'
+            ], 401);
+        }
+
+        $url = trim(config('services.supabase.url'), '/');
+        $key = config('services.supabase.publishable_key');
+
+        if (! $url || ! $key) {
+            return response () ->json([
+                'message' => 'Supabase Authentication is not configured properly.'
+            ], 500);
+        }
+
+        try {
+            $response = Http::acceptJson()
+                ->withHeaders([
+                    'apikey' => $key,
+                    'Authorization' => 'Bearer ' . $token,
+                ])
+                ->timeout(10)
+                ->get($url . '/auth/v1/user');
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            return response()->json([
+                'message' => 'Authentication service is unavailable.',
+            ], 503);
+        }
+
+        if (! $response->successful()) {
+            return response()->json([
+                'message' => 'Invalid or Expired token.',
+            ], 401);
+        }
+        $user = $response->json();
+
+        if (!is_array($user) || empty($user['id'])) {
+            return response()->json([
+                'message' => 'Invalid authentication response from Supabase.',
+            ], 401);
+        }
+
+        $request->attributes->set('supabase_user', $user);
+
+        return $next($request);
+    }
+}
+
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\app\Http\Controllers\Api\BarangayController.php ==========
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\Barangay;
+use Illuminate\Http\Request;
+
+class BarangayController extends Controller
+{
+    public function index() {
+        $barangays = Barangay::query()
+                ->orderBy('name')
+                ->get(['id', 'name', 'code']);
+        return response()->json([
+            'message' => 'Barangays retrieved successfully',
+            'barangays' => $barangays,
+        ]);
+    }
+}
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\app\Http\Controllers\Api\CitizenProfileController.php ==========
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\Profile;
+use Illuminate\Http\Request;
+
+class CitizenProfileController extends Controller
+{
+    public function showOrCreate(Request $request)
+    {
+        $user = $request->attributes->get('supabase_user');
+
+        if (! $user || empty($user['id']) || empty($user['email'])) {
+            return response()->json([
+                'message' => 'Authenticated user information is missing.',
+            ], 401);
+        }
+
+        $profile = Profile::firstOrCreate(
+            ['id' => $user['id']],
+            [
+                'full_name' => $user['user_metadata']['full_name']
+                    ?? $user['user_metadata']['name']
+                    ?? 'Citizen',
+                'email' => $user['email'],
+                'role' => 'citizen',
+            ]
+        );
+
+        // Do not allow an internal staff account to use citizen access.
+        if ($profile->role !== 'citizen') {
+            return response()->json([
+                'message' => 'This account is not registered as a citizen account.',
+            ], 403);
+        }
+
+        return response()->json([
+            'message' => 'Citizen profile retrieved successfully.',
+            'profile' => $profile,
+            'requires_onboarding' => empty($profile->barangay_id),
+        ]);
+    }
+    public function update(Request $request) {
+        $user = $request->attributes->get('supabase_user');
+
+
+        if (! $user || empty($user['id']) || empty($user['email'])) {
+            return response()->json([
+                'message' => 'Authenticated user information is missing.',
+            ], 401);
+        }
+
+        $profile = Profile::find($user['id']);
+
+        if (! $profile) {
+            return response()->json([
+                'message' => 'Citizen profile not found.',
+            ], 404);
+        }
+        if ($profile->role !== 'citizen') {
+            return response()->json([
+                'message' => 'This account is not registered as a citizen account.',
+            ], 403);
+        }
+        $validated = $request->validate([
+            'barangay_id' => [
+                'required',
+                'uuid',
+                'exists:barangays,id',
+            ],
+        ]);
+        $profile->barangay_id = $validated['barangay_id'];
+        $profile->save();
+
+        return response()->json([
+            'message' => 'Citizen profile updated successfully.',
+            'profile' => $profile,
+        ]);
+    }
+}
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\app\Http\Controllers\Api\ComplaintAttachmentController.php ==========
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\ComplaintAttachment;
+use App\Models\Profile;
+use App\Services\SupabaseStorageService;
+use DB;
+use Throwable;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Http\Request;
+
+class ComplaintAttachmentController extends Controller
+{
+    public function signedUrl(Request $request, string $attachmentId, SupabaseStorageService $storage) {
+
+            $user = $request->attributes->get('supabase_user');
+
+            if(!$user || empty($user['id'])) {
+                return response()->json([
+                    'message' => 'Authentication is required',
+                ], 401);
+            }
+
+           $profile = Profile::find($user['id']); 
+
+           if (!$profile) {
+            return response()->json([
+                'message' => 'Profile Not Found',
+            ], 403);
+        }
+
+        $attachment = ComplaintAttachment::find($attachmentId);
+
+        if(!$attachment) {
+            return response()->json([
+                'message' => 'Attachment not Found',
+            ], 403);
+        }
+
+        $complaint = $attachment->complaint;
+
+        if(!$complaint) {
+            return response()->json([
+                'message' => 'related complaint not found',
+            ], 404);
+        }
+
+        $allowed = false;
+
+        if ($profile->role === 'citizen') {
+            $allowed = $complaint->citizen_id === $profile->id;
+        } else if ($profile->role === 'LGU_Staff') {
+            $allowed = true;
+        } else if ($profile->role === 'Barangay_Head') {
+            $allowed = !empty($profile->barangay_id)
+                && $complaint->barangay_id === $profile->barangay_id;
+        } else if ($profile->role === 'Department_Personnel') {
+            $allowed = DB::table('complaint_assignment')
+            ->where('complaint_id', $complaint->id)
+            ->where('assigned_to', $profile->id)
+            ->whereNull('ended_at')->exists();
+        } else if ($profile->role === 'Department_Head'
+            && !empty($profile->department_id) 
+        ) {
+             $allowed = DB::table('complaint_assignments as ca')
+                ->join('profiles as personnel', 'personnel.id', '=', 'ca.assigned_to')
+                ->where('ca.complaint_id', $complaint->id)
+                ->whereNull('ca.ended_at')
+                ->where('personnel.department_id', $profile->department_id)
+                ->exists();
+        }
+
+        if (!$allowed) {
+            return response()->json([
+                'message' => 'You are not authorized to view this attachment.',
+            ], 403);
+        }
+
+        try {
+            $url = $storage->createSignedUrl($attachment->file_path);
+
+            return response()->json([
+                'signed_url' => $url,
+                'expires_in' => 300,
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Failed to generate attachment signed URL.', [
+                'attachment_id' => $attachment->id,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Unable to retrieve the attachment right now.',
+            ], 502);
+        }
+    }
+}
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\app\Http\Controllers\Api\ComplaintCategoryController.php ==========
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
+use App\Models\ComplaintCategory;
+class ComplaintCategoryController extends Controller
+{
+    public function index() {
+        $categories = ComplaintCategory::query()
+        ->where('is_active', true)
+        ->orderBy('name')
+        ->get(['id', 'name', 'description', 'is_active']);
+
+
+        return response()->json([
+            'message' => 'Complaint categories retrieved successfully',
+            'categories' => $categories,
+        ]);
+    }
+}
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\app\Http\Controllers\Api\ComplaintController.php ==========
+<?php
+// Defines the namespace for API controllers.
+namespace App\Http\Controllers\Api;
+
+// Base Laravel controller.
+use App\Http\Controllers\Controller;
+
+// Models used to access database tables.
+use App\Models\Complaint;
+use App\Models\ComplaintAttachment;
+use App\Models\ComplaintUpdate;
+use App\Models\Profile;
+
+// Service responsible for uploading and deleting Supabase files.
+use App\Services\SupabaseStorageService;
+
+// Handles incoming HTTP requests.
+use Illuminate\Http\Request;
+
+// Allows database operations to run inside a transaction.
+use Illuminate\Support\Facades\DB;
+
+// Writes errors to Laravel's log file.
+use Illuminate\Support\Facades\Log;
+// Generates UUIDs for complaint IDs and file names.
+use Illuminate\Support\Str;
+
+// Adds database rules to Laravel validation.
+use Illuminate\Validation\Rule;
+
+// Catches different types of PHP errors and exceptions.
+use Throwable;
+
+class ComplaintController extends Controller
+{
+    
+    //*review who can see the uploaded photo
+
+     public function index(Request $request) {
+        $user = $request->attributes->get ('supabase_user'); 
+
+        if(!$user || empty($user['id'])) {
+            return response()->json([
+                'message' => 'Authentication is required',
+            ], 401);
+        }
+
+        $profile = Profile::find($user['id']);
+            
+            if (!$profile || $profile->role !== 'citizen') {
+                return response()->json([
+                    'message' => 'Only citizen can access their complaint history',
+                ], 403);
+            }
+
+            $complaints = Complaint::query()
+            ->with('category:id,name', 'barangay:id,name',
+            'attachments:id,complaint_id,file_name,mime_type,file_size,resolution_id',
+)
+            ->where('citizen_id', $profile->id)
+            ->orderByDesc('created_at') 
+            ->paginate(10);
+
+            return response()->json([
+                'message' => 'Complaint history is retrieve',
+                'date' => $complaints->items(),
+
+                'pagination' => [
+                    'current_page' => $complaints->currentPage(),
+                    'last_page' => $complaints->lastPage(),
+                    'per_page' => $complaints->perPage(),
+                    'total' => $complaints->total(),
+                ]
+            ]);
+     }
+
+     public function review(Request $request, string $complaintId) {
+
+        $user = $request->attributes->get('supabase_user');
+
+        if (!$user || empty($user['id']) || empty($user['email'])) {
+            return response()->json([
+                'message' => 'Authenticated user information is missing.',
+            ], 401);
+        }
+
+        $profile = Profile::find($user['id']);
+
+        if(!$profile || $profile->role !== 'LGU-Staff') {
+            return response()->json([
+                'message' => 'Only LGU-Staff can review complaint',
+            ], 403);
+        }
+
+        //Validate complaint review accepted and optional rejected reason
+
+        $validated = $request->validated([
+            'decision' => ['required', Rule::in(['accepted', 'declined'])],
+            'rejection_reason' => [
+                'required_if:decision,declined',
+                'nullable',
+                'string',
+                'max:100',
+            ],
+        ]);
+
+        $complaint = Complaint::find($complaintId);
+
+        if(!$complaint) {
+            return response()->json([
+                'message' => 'Complaint Not Found.',
+            ],404);
+        }
+
+        if(!$complaint->status !== 'submitted'){
+            return response()->json([
+                'message' => 'Only Submmitted complaint can be reviewed',
+            ],422);
+        }
+          // Save the status change and its history together.
+        DB::transaction(function () use ($complaint, $profile, $validated) {
+            $oldStatus = $complaint->status;
+            $newStatus = $validated['decision'];
+            $complaint->status = $newStatus;
+            $complaint->rejection_reason = $newStatus === 'declined'
+                ? $validated['rejection_reason']
+                : null;
+
+            $complaint->save();
+
+            ComplaintUpdate::create([
+                'complaint_id' => $complaint->id,
+                'updated_by' => $profile->id,
+                'old_status' => $oldStatus,
+                'new_status' => $newStatus,
+                'comment' => $newStatus === 'declined'
+                    ? $validated['rejection_reason']
+                    : 'Complaint accepted by LGU-Staff.',
+            ]);
+        });
+
+        return response()->json([
+            'message' => 'Complaint reviewed successfully.',
+            'complaint' => $complaint->fresh(),
+            
+        ]);
+
+     }
+
+    public function store(Request $request, SupabaseStorageService $storage) {
+        // Get the authenticated Supabase user.
+        $user = $request->attributes->get('supabase_user');
+
+        // Make sure the authenticated user has an ID and email.
+        if (!$user ||empty($user['id']) || empty($user['email'])) {
+            return response()->json([
+                'message' => 'Authenticated user information is missing.',
+            ], 401);
+        }
+
+        // Find this user's profile using the Supabase user ID.
+        $profile = Profile::find($user['id']);
+
+        // Only citizens are allowed to submit complaints.
+        if (!$profile || $profile->role !== 'citizen') {
+            // Return HTTP 403 if the user is not an authorized citizen.
+            return response()->json([
+                'message' => 'Only authorized citizens can submit complaints.',
+            ], 403);
+        }
+
+        // A citizen must have a barangay assigned to their profile.
+        if (empty($profile->barangay_id)) {
+            // Return HTTP 422 when the profile is incomplete.
+            return response()->json([
+                'message' => 'Please complete your profile and select your barangay.',
+            ], 422);
+        }
+
+        // Validate complaint details and optional attachments.
+        $validated = $request->validate([
+            // Category must be a UUID for an active complaint category.
+            'category_id' => [
+                'required',
+                'uuid',
+                Rule::exists('complaint_categories', 'id')
+                    ->where('is_active', true),
+            ],
+
+            // Title is required and cannot exceed 255 characters.
+            'title' => ['required', 'string', 'max:255'],
+
+            // Description is required and must have at least 10 characters.
+            'description' => ['required', 'string', 'min:10'],
+
+            // Attachments are optional; allow up to five files.
+            'attachments' => ['sometimes', 'array', 'max:5'],
+
+            // Each attachment must be a supported image up to 5 MB.
+            'attachments.*' => [
+                'required',
+                'file',
+                'mimes:jpg,jpeg,png,webp',
+                'max:5120',
+            ],
+        ]);
+
+        // Retrieve the uploaded files, or an empty array if none were sent.
+        $files = $request->file('attachments', []);
+
+        // Generate a unique ID for this complaint before uploading files.
+        $complaintId = (string) Str::uuid();
+
+        // Track successfully uploaded files so they can be deleted if needed.
+        $uploadedFiles = [];
+
+        /*
+         * Upload files before saving database records.
+         * The backend generates the file paths rather than trusting
+         * a path supplied by the client.
+         */
+        try {
+            // Process each uploaded attachment.
+            foreach ($files as $file) {
+
+                // Determine the file extension.
+                // Use jpg as a fallback if the extension cannot be guessed.
+                $extension = strtolower(
+                    $file->guessExtension() ?: 'jpg'
+                );
+
+                // Build a unique path inside the Supabase bucket.
+                $path = sprintf(
+                    'complaints/%s/%s.%s',
+                    $complaintId,
+                    Str::uuid(),
+                    $extension
+                );
+
+                // Upload the file to Supabase Storage.
+                $storage->upload($file, $path);
+
+                // Save file details in memory for later database insertion.
+                $uploadedFiles[] = [
+                    'path' => $path,
+                    'file_name' => $file->getClientOriginalName(),
+                    'mime_type' => $file->getMimeType(),
+                    'file_size' => $file->getSize(),
+                ];
+            }
+        } catch (Throwable $exception) {
+
+            // If an upload fails, remove files already uploaded successfully.
+            $this->cleanupUploadedFiles($storage, $uploadedFiles);
+
+            // Record the technical error for debugging.
+            // The actual error is not exposed to the citizen.
+            Log::error('Complaint attachment upload failed.', [
+                'complaint_id' => $complaintId,
+                'error' => $exception->getMessage(),
+            ]);
+
+            // Return an HTTP 502 response to indicate an upstream failure.
+            return response()->json([
+                'message' => 'Attachment upload failed. Please try again.',
+            ], 502);
+        }
+
+        /*
+         * Save the complaint and related database records together.
+         * A database transaction rolls back database changes if an
+         * operation inside the transaction fails.
+         */
+        try {
+            // Run the database operations inside one transaction.
+            $complaint = DB::transaction(function () use (
+                $profile,
+                $validated,
+                $uploadedFiles,
+                $complaintId
+            ) {
+
+                // Create the main complaint record.
+                $complaint = Complaint::create([
+                    'id' => $complaintId,
+                    'citizen_id' => $profile->id,
+                    'category_id' => $validated['category_id'],
+                    'barangay_id' => $profile->barangay_id,
+                    'title' => $validated['title'],
+                    'description' => $validated['description'],
+                    'priority' => 'medium',
+                    'status' => 'submitted',
+                ]);
+
+                // Create the initial complaint status history record.
+                ComplaintUpdate::create([
+                    'complaint_id' => $complaint->id,
+                    'updated_by' => $profile->id,
+                    'old_status' => null,
+                    'new_status' => 'submitted',
+                    'comment' => 'Complaint submitted by citizen.',
+                ]);
+
+                // Create a database record for every uploaded attachment.
+                foreach ($uploadedFiles as $uploadedFile) {
+                    ComplaintAttachment::create([
+                        'complaint_id' => $complaint->id,
+                        'uploaded_by' => $profile->id,
+                        'file_path' => $uploadedFile['path'],
+                        'file_name' => $uploadedFile['file_name'],
+                        'mime_type' => $uploadedFile['mime_type'],
+                        'file_size' => $uploadedFile['file_size'],
+                    ]);
+                }
+
+                // Load the complaint's attachments before returning it.
+                return $complaint->load('attachments');
+            });
+        } catch (Throwable $exception) {
+
+            // A database rollback cannot delete files from Supabase.
+            // Manually remove uploaded files if database saving fails.
+            $this->cleanupUploadedFiles($storage, $uploadedFiles);
+
+            // Log the technical error for the developer.
+            Log::error('Complaint database operation failed.', [
+                'complaint_id' => $complaintId,
+                'error' => $exception->getMessage(),
+            ]);
+
+            // Tell the frontend that the complaint could not be saved.
+            return response()->json([
+                'message' => 'Unable to save the complaint. Please try again.',
+            ], 500);
+        }
+
+        // Return the saved complaint and its attachments to the frontend.
+        // HTTP 201 means a resource was successfully created.
+        return response()->json([
+            'message' => 'Complaint submitted successfully.',
+            'complaint' => $complaint,
+        ], 201);
+    }
+
+    /**
+     * Attempts to delete uploaded files when a later operation fails.
+     */
+    private function cleanupUploadedFiles(
+        SupabaseStorageService $storage,
+        array $uploadedFiles
+    ): void {
+
+        // Process every file that was successfully uploaded.
+        foreach ($uploadedFiles as $uploadedFile) {
+            try {
+                // Delete the file from Supabase Storage using its saved path.
+                $storage->delete($uploadedFile['path']);
+            } catch (Throwable $exception) {
+
+                // Log cleanup failures so they can be investigated later.
+                Log::error('Failed to clean up a complaint attachment.', [
+                    'path' => $uploadedFile['path'],
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+        }
+    }
+}
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\app\Http\Controllers\Api\DepartmentController.php ==========
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
+use App\Models\Department;
+use Illuminate\Validation\Rule;
+class DepartmentController extends Controller
+{
+    //GET all departments
+    public function index() {
+        $departments = Department::query()
+                ->orderBy('name')
+                ->get(['id', 'name', 'description']);
+        return response()->json([
+            'message' => 'Departments retrieved successfully',
+            'departments' => $departments,
+        ]);
+    }
+
+    //POST create a new department
+    public function store(Request $request) {
+        $validatedData = $request->validate([
+            'name' => ['required', 'string', 'max:255', 'unique:departments,name'],
+            'description' => 'nullable|string|max:255',
+        ]);
+        $department = Department::create($validatedData);
+        return response()->json([
+            'message' => 'Department created successfully',
+            'department' => $department,
+        ], 201);
+    }
+    //PUT update an existing department
+    public function update(Request $request, $id) {
+        $department = Department::findOrFail($id);
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255', Rule::unique('departments')->ignore($department->id)],
+            'description' => ['nullable', 'string', 'max:255'],
+        ]);
+        $department->update($validated);
+        return response()->json([
+            'message' => 'Department updated successfully',
+            'department' => $department,
+        ]);
+    }
+    //DELETE delete a department
+    public function delete($id) {
+        $department = Department::findOrFail($id);
+
+        $department->delete();
+
+        return response()->json([
+            'message' => 'Department deleted successfully',
+        ]);
+    }
+    
+}
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\app\Models\Barangay.php ==========
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class Barangay extends Model
+{
+    //Laravel define barangay table to be used in the model
+    protected $table = 'barangays';
+
+    protected $fillable = [
+        'id',
+        'name',
+        'code'
+    ];
+
+    // Supabase provides UUIDs, so the ID is not auto-incrementing.
+    public $incrementing = false;
+
+    // The primary key is stored as a string (UUID)
+    protected $keyType = 'string';
+}
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\app\Models\Complaint.php ==========
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class Complaint extends Model
+{
+    use HasUuids;
+
+    protected $table = 'complaints';
+
+
+    protected $fillable = [
+        'id',
+        'citizen_id',
+        'category_id',
+        'barangay_id',
+
+        'title',
+        'description',
+        'priority',
+        'status',
+        'resolution_level',
+        'rejection_reason'
+    ];
+
+    public function casts(): array {
+        return [
+            'created_at' => 'datetime',
+            'updated_at' => 'datetime'
+        ];
+    }
+    public function citizen(): BelongsTo {
+        return $this->belongsTo(Profile::class, 'citizen_id');
+    }
+
+//* route
+    public function category(): BelongsTo{
+        return $this->belongsTo(ComplaintCategory::class, 'category_id');
+    }
+
+    public function barangay(): BelongsTo{
+        return $this->belongsTo(Barangay::class, 'barangay_id');
+    }
+
+    public function attachments(): HasMany{
+        return $this->hasMany(ComplaintAttachment::class, 'complaint_id');
+    }
+
+    public function updates(): HasMany{
+        return $this->hasMany(ComplaintUpdate::class, 'complaint_id');
+    }
+}
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\app\Models\ComplaintAttachment.php ==========
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class ComplaintAttachment extends Model
+{
+    use HasUuids;
+
+    protected $table = 'complaint_attachments';
+
+    protected $fillable = [
+        'complaint_id',
+        'uploaded_by',
+        'file_path',
+        'file_name',
+        'mime_type',
+        'file_size',
+        'resolution_id',
+    ];
+
+    public function complaint(): BelongsTo {
+        return $this->belongsTo(Complaint::class, 'complaint_id');
+    }
+
+    public function uploader(): BelongsTo{
+        return $this->belongsTo(Profile::class, 'uploaded_by');
+    }
+    public $timestamps = false;
+}
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\app\Models\ComplaintCategory.php ==========
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Concerns\HasUlids;
+use Illuminate\Database\Eloquent\Model;
+
+class ComplaintCategory extends Model
+{
+
+    use HasUlids;
+    //Laravel define complaint_categories table to be used in the model
+    protected $table = 'complaint_categories';
+
+    protected $fillable = [
+        'name',
+        'description',
+        'is_active'
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'is_active' => 'boolean',
+        ];
+    }
+
+
+}
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\app\Models\ComplaintUpdate.php ==========
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Model;
+
+class ComplaintUpdate extends Model
+{
+    use HasUuids;
+
+    protected $table = 'complaint_updates';
+
+    protected $fillable = [
+        'complaint_id',
+        'updated_by',
+        'old_status',
+        'new_status',
+        'comment',
+    ];
+    public $timestamps = false;
+}
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\app\Models\Department.php ==========
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Concerns\HasUlids;
+use Illuminate\Database\Eloquent\Model;
+
+class Department extends Model
+{
+    use HasUlids;
+    protected $table = 'departments';
+
+    protected $fillable = [
+        'name',
+        'description'
+    ];
+}
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\app\Models\Profile.php ==========
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class Profile extends Model
+{
+    //Laravel define profile table to be used in the model
+    protected $table = 'profiles';
+
+
+    //columns that can be mass assigned
+    protected $fillable = [
+        'id',
+        'full_name',
+        'email',
+        'role',
+        'barangay_id',
+        'department_id',    
+    ];
+
+    // Supabase provides UUIDs, so the ID is not auto-incrementing.
+    public $incrementing = false;
+
+
+    // The primary key is stored as a string (UUID).
+    protected $keyType = 'string';
+}
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\app\Models\User.php ==========
+<?php
+
+namespace App\Models;
+
+// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Database\Factories\UserFactory;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
+
+#[Fillable(['name', 'email', 'password'])]
+#[Hidden(['password', 'remember_token'])]
+class User extends Authenticatable
+{
+    /** @use HasFactory<UserFactory> */
+    use HasFactory, Notifiable;
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'email_verified_at' => 'datetime',
+            'password' => 'hashed',
+        ];
+    }
+}
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\database\migrations\0001_01_01_000000_create_users_table.php ==========
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('users', function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->string('email')->unique();
+            $table->timestamp('email_verified_at')->nullable();
+            $table->string('password');
+            $table->rememberToken();
+            $table->timestamps();
+        });
+
+        Schema::create('password_reset_tokens', function (Blueprint $table) {
+            $table->string('email')->primary();
+            $table->string('token');
+            $table->timestamp('created_at')->nullable();
+        });
+
+        Schema::create('sessions', function (Blueprint $table) {
+            $table->string('id')->primary();
+            $table->foreignId('user_id')->nullable()->index();
+            $table->string('ip_address', 45)->nullable();
+            $table->text('user_agent')->nullable();
+            $table->longText('payload');
+            $table->integer('last_activity')->index();
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('users');
+        Schema::dropIfExists('password_reset_tokens');
+        Schema::dropIfExists('sessions');
+    }
+};
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\database\migrations\0001_01_01_000001_create_cache_table.php ==========
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('cache', function (Blueprint $table) {
+            $table->string('key')->primary();
+            $table->mediumText('value');
+            $table->bigInteger('expiration')->index();
+        });
+
+        Schema::create('cache_locks', function (Blueprint $table) {
+            $table->string('key')->primary();
+            $table->string('owner');
+            $table->bigInteger('expiration')->index();
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('cache');
+        Schema::dropIfExists('cache_locks');
+    }
+};
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\database\migrations\0001_01_01_000002_create_jobs_table.php ==========
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('jobs', function (Blueprint $table) {
+            $table->id();
+            $table->string('queue')->index();
+            $table->longText('payload');
+            $table->unsignedSmallInteger('attempts');
+            $table->unsignedInteger('reserved_at')->nullable();
+            $table->unsignedInteger('available_at');
+            $table->unsignedInteger('created_at');
+        });
+
+        Schema::create('job_batches', function (Blueprint $table) {
+            $table->string('id')->primary();
+            $table->string('name');
+            $table->integer('total_jobs');
+            $table->integer('pending_jobs');
+            $table->integer('failed_jobs');
+            $table->longText('failed_job_ids');
+            $table->mediumText('options')->nullable();
+            $table->integer('cancelled_at')->nullable();
+            $table->integer('created_at');
+            $table->integer('finished_at')->nullable();
+        });
+
+        Schema::create('failed_jobs', function (Blueprint $table) {
+            $table->id();
+            $table->string('uuid')->unique();
+            $table->string('connection');
+            $table->string('queue');
+            $table->longText('payload');
+            $table->longText('exception');
+            $table->timestamp('failed_at')->useCurrent();
+
+            $table->index(['connection', 'queue', 'failed_at']);
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('jobs');
+        Schema::dropIfExists('job_batches');
+        Schema::dropIfExists('failed_jobs');
+    }
+};
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\database\migrations\2026_10_16_075418_create_barangays_table.php ==========
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('barangays', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->string('name')->unique();
+            $table->string('code')->unique()->nullable();
+            $table->timestamps();
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('barangays');
+    }
+};
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\database\migrations\2026_10_16_075419_create_departments_table.php ==========
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('departments', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->string('name')->unique();
+            $table->string('description')->nullable();
+            $table->timestamps();
+        });
+    }
+
+    /**
+     * Reverse the migrations.s
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('departments');
+    }
+};
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\database\migrations\2026_10_16_075420_create_profiles_table.php ==========
+
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('profiles', function (Blueprint $table) {
+            // Must match the user's UUID from Supabase Auth.
+            $table->uuid('id')->primary();
+
+            $table->string('full_name');
+            $table->string('email')->unique();
+
+            $table->string('role')->index();
+
+            $table->uuid('barangay_id')->nullable();
+            $table->uuid('department_id')->nullable();
+
+            $table->timestamps();
+
+            $table->foreign('barangay_id')
+                ->references('id')
+                ->on('barangays')
+                ->nullOnDelete();
+
+            $table->foreign('department_id')
+                ->references('id')
+                ->on('departments')
+                ->nullOnDelete();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('profiles');
+    }
+};
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\database\migrations\2026_10_16_075421_create_complaint_categories_table.php ==========
+
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('complaint_categories', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->string('name')->unique();
+            $table->text('description')->nullable();
+            $table->boolean('is_active')->default(true);
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('complaint_categories');
+    }
+};
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\database\migrations\2026_10_16_075422_create_complaints_table.php ==========
+
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('complaints', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+
+            $table->uuid('citizen_id');
+            $table->uuid('category_id');
+            $table->uuid('barangay_id');
+
+            $table->string('title');
+            $table->text('description');
+
+            $table->string('priority')->default('medium');
+            $table->string('status')->default('submitted');
+            $table->string('resolution_level')->nullable();
+
+            $table->text('rejection_reason')->nullable();
+
+            $table->timestamps();
+
+            $table->foreign('citizen_id')
+                ->references('id')
+                ->on('profiles')
+                ->restrictOnDelete();
+
+            $table->foreign('category_id')
+                ->references('id')
+                ->on('complaint_categories')
+                ->restrictOnDelete();
+
+            $table->foreign('barangay_id')
+                ->references('id')
+                ->on('barangays')
+                ->restrictOnDelete();
+
+            $table->index('citizen_id');
+            $table->index('category_id');
+            $table->index('barangay_id');
+            $table->index('status');
+            $table->index('created_at');
+        });
+
+        DB::statement("
+            ALTER TABLE complaints
+            ADD CONSTRAINT complaints_status_check
+            CHECK (status IN (
+                'submitted',
+                'under_review',
+                'assigned',
+                'in_progress',
+                'resolved',
+                'closed',
+                'rejected'
+            ))
+        ");
+
+        DB::statement("
+            ALTER TABLE complaints
+            ADD CONSTRAINT complaints_priority_check
+            CHECK (priority IN ('low', 'medium', 'high', 'urgent'))
+        ");
+
+        DB::statement("
+            ALTER TABLE complaints
+            ADD CONSTRAINT complaints_resolution_level_check
+            CHECK (
+                resolution_level IS NULL
+                OR resolution_level IN ('barangay', 'lgu')
+            )
+        ");
+
+        DB::statement("
+            ALTER TABLE complaints
+            ADD CONSTRAINT complaints_rejection_reason_check
+            CHECK (
+                status <> 'rejected'
+                OR (
+                    rejection_reason IS NOT NULL
+                    AND LENGTH(TRIM(rejection_reason)) > 0
+                )
+            )
+        ");
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('complaints');
+    }
+};
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\database\migrations\2026_10_16_075423_create_complaint_attachments_table.php ==========
+
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('complaint_attachments', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+
+            $table->uuid('complaint_id');
+            $table->uuid('uploaded_by');
+
+            // Path of the file stored in Supabase Storage
+            $table->string('file_path');
+            $table->string('file_name');
+            $table->string('mime_type');
+            $table->unsignedBigInteger('file_size');
+
+            $table->timestamp('created_at')->useCurrent();
+
+            $table->foreign('complaint_id')
+                ->references('id')
+                ->on('complaints')
+                ->cascadeOnDelete();
+
+            $table->foreign('uploaded_by')
+                ->references('id')
+                ->on('profiles')
+                ->restrictOnDelete();
+
+            $table->index(['complaint_id', 'created_at']);
+            $table->index('uploaded_by');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('complaint_attachments');
+    }
+};
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\database\migrations\2026_10_16_075424_create_complaint_assignments_table.php ==========
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
+
+return new class extends Migration {
+    public function up(): void
+    {
+        Schema::create('complaint_assignments', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+
+            $table->uuid('complaint_id');
+            $table->uuid('assigned_to');
+            $table->uuid('assigned_by');
+
+            // barangay or lgu
+            $table->string('assignment_level');
+
+            $table->text('notes')->nullable();
+
+            $table->timestamp('assigned_at')->useCurrent();
+            $table->timestamp('ended_at')->nullable();
+
+            $table->timestamps();
+
+            $table->foreign('complaint_id')
+                ->references('id')
+                ->on('complaints')
+                ->cascadeOnDelete();
+
+            $table->foreign('assigned_to')
+                ->references('id')
+                ->on('profiles')
+                ->restrictOnDelete();
+
+            $table->foreign('assigned_by')
+                ->references('id')
+                ->on('profiles')
+                ->restrictOnDelete();
+
+            $table->index(['complaint_id', 'assigned_at']);
+            $table->index(['assigned_to', 'ended_at']);
+            $table->index('assignment_level');
+        });
+        DB::statement("
+        ALTER TABLE complaint_assignments
+         ADD CONSTRAINT complaint_assignments_level_check
+         CHECK (assignment_level IN ('barangay', 'lgu'))
+        ");
+    }
+
+
+    public function down(): void
+    {
+        Schema::dropIfExists('complaint_assignments');
+    }
+};
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\database\migrations\2026_10_16_075425_create_complaint_updates_table.php ==========
+
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('complaint_updates', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+
+            $table->uuid('complaint_id');
+            $table->uuid('updated_by');
+
+            $table->string('old_status')->nullable();
+            $table->string('new_status');
+            $table->text('comment')->nullable();
+
+            $table->timestamp('created_at')->useCurrent();
+
+            $table->foreign('complaint_id')
+                ->references('id')
+                ->on('complaints')
+                ->cascadeOnDelete();
+
+            $table->foreign('updated_by')
+                ->references('id')
+                ->on('profiles')
+                ->restrictOnDelete();
+
+            $table->index(['complaint_id', 'created_at']);
+            $table->index('updated_by');
+        });
+
+        DB::statement("
+            ALTER TABLE complaint_updates
+            ADD CONSTRAINT complaint_updates_new_status_check
+            CHECK (new_status IN (
+                'submitted',
+                'under_review',
+                'assigned',
+                'in_progress',
+                'resolved',
+                'closed',
+                'rejected'
+            ))
+        ");
+
+        DB::statement("
+            ALTER TABLE complaint_updates
+            ADD CONSTRAINT complaint_updates_old_status_check
+            CHECK (
+                old_status IS NULL
+                OR old_status IN (
+                    'submitted',
+                    'under_review',
+                    'assigned',
+                    'in_progress',
+                    'resolved',
+                    'closed',
+                    'rejected'
+                )
+            )
+        ");
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('complaint_updates');
+    }
+};
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\database\migrations\2026_10_16_075426_create_feedback_table.php ==========
+
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('feedback', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+
+            // One feedback record per complaint
+            $table->uuid('complaint_id')->unique();
+            $table->uuid('citizen_id');
+
+            // Valid rating: 1 to 5 (enforce in API and database)
+            $table->unsignedTinyInteger('rating');
+            $table->text('comment')->nullable();
+
+            $table->timestamps();
+
+            $table->foreign('complaint_id')
+                ->references('id')
+                ->on('complaints')
+                ->cascadeOnDelete();
+
+            $table->foreign('citizen_id')
+                ->references('id')
+                ->on('profiles')
+                ->restrictOnDelete();
+
+            $table->index('citizen_id');
+            
+        });
+        DB::statement("
+    ALTER TABLE feedback
+    ADD CONSTRAINT feedback_rating_check
+    CHECK (rating BETWEEN 1 AND 5)
+");
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('feedback');
+    }
+};
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\database\migrations\2026_10_17_183306_create_personal_access_tokens_table.php ==========
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('personal_access_tokens', function (Blueprint $table) {
+            $table->id();
+            $table->morphs('tokenable');
+            $table->text('name');
+            $table->string('token', 64)->unique();
+            $table->text('abilities')->nullable();
+            $table->timestamp('last_used_at')->nullable();
+            $table->timestamp('expires_at')->nullable()->index();
+            $table->timestamps();
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('personal_access_tokens');
+    }
+};
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\database\migrations\2026_10_19_153612_create_complaint_resolutions_table.php ==========
+
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('complaint_resolutions', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+
+            $table->uuid('complaint_id');
+            $table->uuid('submitted_by');
+
+            $table->text('resolution_description');
+
+            $table->string('review_status')->default('pending_review');
+
+            $table->uuid('reviewed_by')->nullable();
+            $table->text('review_comment')->nullable();
+
+            $table->timestamp('submitted_at')->useCurrent();
+            $table->timestamp('reviewed_at')->nullable();
+
+            $table->timestamps();
+
+            $table->foreign('complaint_id')
+                ->references('id')
+                ->on('complaints')
+                ->cascadeOnDelete();
+
+            $table->foreign('submitted_by')
+                ->references('id')
+                ->on('profiles')
+                ->restrictOnDelete();
+
+            $table->foreign('reviewed_by')
+                ->references('id')
+                ->on('profiles')
+                ->restrictOnDelete();
+
+            $table->index(['complaint_id', 'submitted_at']);
+            $table->index('submitted_by');
+            $table->index('review_status');
+        });
+
+        DB::statement("
+            ALTER TABLE complaint_resolutions
+            ADD CONSTRAINT complaint_resolutions_review_status_check
+            CHECK (
+                review_status IN (
+                    'pending_review',
+                    'approved',
+                    'returned'
+                )
+            )
+        ");
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('complaint_resolutions');
+    }
+};
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\database\migrations\2026_10_19_153618_update_complaint_status_constraints.php ==========
+
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Support\Facades\DB;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        /*
+         * Update allowed complaint statuses.
+         */
+        DB::statement("
+            ALTER TABLE complaints
+            DROP CONSTRAINT IF EXISTS complaints_status_check
+        ");
+
+        DB::statement("
+            ALTER TABLE complaints
+            ADD CONSTRAINT complaints_status_check
+            CHECK (status IN (
+                'submitted',
+                'under_review',
+                'accepted',
+                'declined',
+                'assigned',
+                'in_progress',
+                'pending_review',
+                'resolved'
+            ))
+        ");
+
+        /*
+         * Require a reason when a complaint is declined.
+         */
+        DB::statement("
+            ALTER TABLE complaints
+            DROP CONSTRAINT IF EXISTS complaints_rejection_reason_check
+        ");
+
+        DB::statement("
+            ALTER TABLE complaints
+            ADD CONSTRAINT complaints_rejection_reason_check
+            CHECK (
+                status <> 'declined'
+                OR (
+                    rejection_reason IS NOT NULL
+                    AND LENGTH(TRIM(rejection_reason)) > 0
+                )
+            )
+        ");
+
+        /*
+         * Update status history constraints.
+         */
+        DB::statement("
+            ALTER TABLE complaint_updates
+            DROP CONSTRAINT IF EXISTS
+                complaint_updates_new_status_check
+        ");
+
+        DB::statement("
+            ALTER TABLE complaint_updates
+            ADD CONSTRAINT complaint_updates_new_status_check
+            CHECK (new_status IN (
+                'submitted',
+                'under_review',
+                'accepted',
+                'declined',
+                'assigned',
+                'in_progress',
+                'pending_review',
+                'resolved'
+            ))
+        ");
+
+        DB::statement("
+            ALTER TABLE complaint_updates
+            DROP CONSTRAINT IF EXISTS
+                complaint_updates_old_status_check
+        ");
+
+        DB::statement("
+            ALTER TABLE complaint_updates
+            ADD CONSTRAINT complaint_updates_old_status_check
+            CHECK (
+                old_status IS NULL
+                OR old_status IN (
+                    'submitted',
+                    'under_review',
+                    'accepted',
+                    'declined',
+                    'assigned',
+                    'in_progress',
+                    'pending_review',
+                    'resolved'
+                )
+            )
+        ");
+    }
+
+    public function down(): void
+    {
+        /*
+         * Restore the original complaint status constraints.
+         * Rollback may fail if records use the new statuses.
+         */
+        DB::statement("
+            ALTER TABLE complaint_updates
+            DROP CONSTRAINT IF EXISTS
+                complaint_updates_new_status_check
+        ");
+
+        DB::statement("
+            ALTER TABLE complaint_updates
+            ADD CONSTRAINT complaint_updates_new_status_check
+            CHECK (new_status IN (
+                'submitted',
+                'under_review',
+                'assigned',
+                'in_progress',
+                'resolved',
+                'closed',
+                'rejected'
+            ))
+        ");
+
+        DB::statement("
+            ALTER TABLE complaint_updates
+            DROP CONSTRAINT IF EXISTS
+                complaint_updates_old_status_check
+        ");
+
+        DB::statement("
+            ALTER TABLE complaint_updates
+            ADD CONSTRAINT complaint_updates_old_status_check
+            CHECK (
+                old_status IS NULL
+                OR old_status IN (
+                    'submitted',
+                    'under_review',
+                    'assigned',
+                    'in_progress',
+                    'resolved',
+                    'closed',
+                    'rejected'
+                )
+            )
+        ");
+
+        DB::statement("
+            ALTER TABLE complaints
+            DROP CONSTRAINT IF EXISTS complaints_status_check
+        ");
+
+        DB::statement("
+            ALTER TABLE complaints
+            ADD CONSTRAINT complaints_status_check
+            CHECK (status IN (
+                'submitted',
+                'under_review',
+                'assigned',
+                'in_progress',
+                'resolved',
+                'closed',
+                'rejected'
+            ))
+        ");
+
+        DB::statement("
+            ALTER TABLE complaints
+            DROP CONSTRAINT IF EXISTS complaints_rejection_reason_check
+        ");
+
+        DB::statement("
+            ALTER TABLE complaints
+            ADD CONSTRAINT complaints_rejection_reason_check
+            CHECK (
+                status <> 'rejected'
+                OR (
+                    rejection_reason IS NOT NULL
+                    AND LENGTH(TRIM(rejection_reason)) > 0
+                )
+            )
+        ");
+    }
+};
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\database\migrations\2026_10_19_154648_add_resolution_id_to_complaint_attachments_table.php ==========
+
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('complaint_attachments', function (Blueprint $table) {
+            $table->uuid('resolution_id')->nullable();
+
+            $table->foreign('resolution_id')
+                ->references('id')
+                ->on('complaint_resolutions')
+                ->nullOnDelete();
+
+            $table->index('resolution_id');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('complaint_attachments', function (Blueprint $table) {
+            $table->dropForeign(['resolution_id']);
+            $table->dropIndex(['resolution_id']);
+            $table->dropColumn('resolution_id');
+        });
+    }
+};
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\database\seeders\BarangaySeeder.php ==========
+<?php
+
+namespace Database\Seeders;
+
+use App\Models\Barangay;
+use Illuminate\Database\Seeder;
+use Illuminate\Support\Str;
+
+class BarangaySeeder extends Seeder
+{
+    /**
+     * Seed the barangays of Tagoloan, Misamis Oriental.
+     */
+    public function run(): void
+    {
+        $barangays = [
+            ['Baluarte', '1004324001'],
+            ['Casinglot', '1004324002'],
+            ['Gracia', '1004324003'],
+            ['Mohon', '1004324004'],
+            ['Natumolan', '1004324005'],
+            ['Poblacion', '1004324006'],
+            ['Rosario', '1004324007'],
+            ['Santa Ana', '1004324008'],
+            ['Santa Cruz', '1004324009'],
+            ['Sugbongcogon', '1004324010'],
+        ];
+
+        foreach ($barangays as [$name, $code]) {
+            Barangay::firstOrCreate(
+                ['name' => $name],
+                ['id' => (string) Str::uuid(), 'code' => $code],
+            );
+        }
+    }
+}
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\database\seeders\DatabaseSeeder.php ==========
+<?php
+
+namespace Database\Seeders;
+
+use App\Models\User;
+use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use Illuminate\Database\Seeder;
+
+class DatabaseSeeder extends Seeder
+{
+    use WithoutModelEvents;
+
+    /**
+     * Seed the application's database.
+     */
+    public function run(): void
+    {
+        $this->call(BarangaySeeder::class);
+
+        // User::factory(10)->create();
+
+        User::factory()->create([
+            'name' => 'Test User',
+            'email' => 'test@example.com',
+        ]);
+    }
+}
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\tests\Feature\ExampleTest.php ==========
+<?php
+
+namespace Tests\Feature;
+
+// use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+class ExampleTest extends TestCase
+{
+    /**
+     * A basic test example.
+     */
+    public function test_the_application_returns_a_successful_response(): void
+    {
+        $response = $this->get('/');
+
+        $response->assertStatus(200);
+    }
+}
+
+
+========== C:\Users\tanta\LGU-Complaint-Management-System\backend\tests\Unit\ExampleTest.php ==========
+<?php
+
+namespace Tests\Unit;
+
+use PHPUnit\Framework\TestCase;
+
+class ExampleTest extends TestCase
+{
+    /**
+     * A basic test example.
+     */
+    public function test_that_true_is_true(): void
+    {
+        $this->assertTrue(true);
+    }
+}

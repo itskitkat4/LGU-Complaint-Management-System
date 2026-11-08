@@ -18,6 +18,7 @@ return [
         'url' => env('SUPABASE_URL'),
         'publishable_key' => env('SUPABASE_PUBLISHABLE_KEY'),
         'secret_key' => env('SUPABASE_SECRET_KEY'),
+        'frontend_url' => env('FRONTEND_URL', 'http://localhost:5173'),
         'storage_bucket' => env(
             'SUPABASE_STORAGE_BUCKET',
             'complaint-attachments'

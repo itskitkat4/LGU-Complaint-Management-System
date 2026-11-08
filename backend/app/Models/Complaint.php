@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Complaint extends Model
 {
@@ -53,5 +54,15 @@ class Complaint extends Model
 
     public function updates(): HasMany{
         return $this->hasMany(ComplaintUpdate::class, 'complaint_id');
+    }
+    public function assignments(): HasMany{
+        return $this->hasMany(ComplaintAssignment::class, 'complaint_id');
+    }
+    public function activeAssignment(): HasOne{
+        return $this->hasOne(ComplaintAssignment::class, 'complaint_id')
+        ->whereNull('ended_at');
+    }
+    public function escalations(): HasMany{
+        return $this->hasMany(ComplaintEscalation::class, 'complaint_id');
     }
 }

@@ -1,7 +1,7 @@
 <?php
-
 namespace App\Http\Middleware;
 
+use App\Models\Profile;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -11,21 +11,20 @@ class VerifySupabaseToken
 {
     public function handle(Request $request, Closure $next): Response
     {
-
         $token = $request->bearerToken();
 
-        if (! $token) {
-            return response()
-            ->json(['message' => 'Unauthenticated'
+        if (!$token) {
+            return response()->json([
+                'message' => 'Unauthenticated',
             ], 401);
         }
 
         $url = trim(config('services.supabase.url'), '/');
         $key = config('services.supabase.publishable_key');
 
-        if (! $url || ! $key) {
-            return response () ->json([
-                'message' => 'Supabase Authentication is not configured properly.'
+        if (!$url || !$key) {
+            return response()->json([
+                'message' => 'Supabase Authentication is not configured properly.',
             ], 500);
         }
 
@@ -37,17 +36,19 @@ class VerifySupabaseToken
                 ])
                 ->timeout(10)
                 ->get($url . '/auth/v1/user');
+
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
             return response()->json([
                 'message' => 'Authentication service is unavailable.',
             ], 503);
         }
 
-        if (! $response->successful()) {
+        if (!$response->successful()) {
             return response()->json([
                 'message' => 'Invalid or Expired token.',
             ], 401);
         }
+
         $user = $response->json();
 
         if (!is_array($user) || empty($user['id'])) {
@@ -56,9 +57,17 @@ class VerifySupabaseToken
             ], 401);
         }
 
+        // Check whether the authenticated user has an active profile.
+        $profile = Profile::find($user['id']);
+
+        if ($profile && !$profile->is_active) {
+            return response()->json([
+                'message' => 'Your account has been deactivated. Please cooperate with the System Administrator.',
+            ], 403);
+        }
+
         $request->attributes->set('supabase_user', $user);
 
         return $next($request);
     }
 }
-
