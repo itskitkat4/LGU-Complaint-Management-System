@@ -1,8 +1,11 @@
-
 import { useEffect, useMemo, useState } from "react";
 import AdminLayout from "../../layouts/AdminLayout";
 import { Icon, inputClass } from "../../components/ui";
 import { getBarangays } from "../../lib/api";
+
+function Skeleton({ className = "" }) {
+  return <div className={`animate-pulse bg-slate-200 ${className}`} />;
+}
 
 export default function Barangays() {
   const [barangays, setBarangays] = useState([]);
@@ -83,9 +86,13 @@ useEffect(() => {
               Total Registered Barangays
             </p>
 
-            <p className="mt-2 text-3xl font-bold text-slate-900">
-              {loading ? "—" : barangays.length}
-            </p>
+            {loading ? (
+              <Skeleton className="mt-2 h-9 w-16 rounded" />
+            ) : (
+              <p className="mt-2 text-3xl font-bold text-slate-900">
+                {barangays.length}
+              </p>
+            )}
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-white p-5">
@@ -93,9 +100,13 @@ useEffect(() => {
               Search Results
             </p>
 
-            <p className="mt-2 text-3xl font-bold text-slate-900">
-              {loading ? "—" : filteredBarangays.length}
-            </p>
+            {loading ? (
+              <Skeleton className="mt-2 h-9 w-16 rounded" />
+            ) : (
+              <p className="mt-2 text-3xl font-bold text-slate-900">
+                {filteredBarangays.length}
+              </p>
+            )}
           </div>
         </section>
 
@@ -142,8 +153,37 @@ useEffect(() => {
           </div>
 
           {loading ? (
-            <div className="px-5 py-12 text-center text-sm text-slate-500">
-              Loading barangay records...
+            <div role="status" className="overflow-x-auto">
+              <span className="sr-only">Loading barangay records...</span>
+
+              <table
+                className="w-full min-w-[550px] text-left text-sm"
+                aria-hidden="true"
+              >
+                <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-5 py-3.5">Barangay Name</th>
+                    <th className="px-5 py-3.5">Barangay Code</th>
+                    <th className="px-5 py-3.5">Barangay ID</th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-slate-100">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <tr key={i}>
+                      <td className="px-5 py-4">
+                        <Skeleton className="h-4 w-40 rounded" />
+                      </td>
+                      <td className="px-5 py-4">
+                        <Skeleton className="h-4 w-20 rounded" />
+                      </td>
+                      <td className="px-5 py-4">
+                        <Skeleton className="h-3 w-28 rounded" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           ) : error ? (
             <div className="p-5 text-center">

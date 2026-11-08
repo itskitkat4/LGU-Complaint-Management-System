@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import tagoloanSeal from "../../assets/System_Logo.png";
@@ -24,6 +23,33 @@ const personnelRoles = [
     "Department_Head",
     "Department_Personnel",
 ];
+
+// NEW: small spinner used inside the buttons
+function Spinner({ className = "h-4 w-4" }) {
+    return (
+        <svg
+            viewBox="0 0 24 24"
+            className={`${className} animate-spin motion-reduce:animate-none`}
+            fill="none"
+            aria-hidden="true"
+        >
+            <circle
+                cx="12"
+                cy="12"
+                r="9"
+                stroke="currentColor"
+                strokeWidth="3"
+                className="opacity-25"
+            />
+            <path
+                d="M21 12a9 9 0 0 0-9-9"
+                stroke="currentColor"
+                strokeWidth="3"
+                strokeLinecap="round"
+            />
+        </svg>
+    );
+}
 
 function Field({ id, label, children }) {
     return (
@@ -84,6 +110,10 @@ function Login() {
     const [password, setPassword] = useState("");
     const [notice, setNotice] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
+
+    // NEW: remembers which action is running ("google" | "login" | "reset")
+    // so only that button shows its loading state.
+    const [activeAction, setActiveAction] = useState(null);
 
     // Get the authenticated user's profile and redirect by role.
     async function finishLogin(expectedAccountType) {
@@ -154,6 +184,7 @@ function Login() {
         async function verifyGoogleLogin() {
             try {
                 setIsLoading(true);
+                setActiveAction("google"); // NEW
 
                 const {
                     data: { session },
@@ -179,6 +210,7 @@ function Login() {
             } finally {
                 if (active) {
                     setIsLoading(false);
+                    setActiveAction(null); // NEW
                     window.history.replaceState({}, "", "/login");
                 }
             }
@@ -196,6 +228,7 @@ function Login() {
         if (isLoading) return;
 
         setIsLoading(true);
+        setActiveAction("google"); // NEW
         setNotice({
             type: "info",
             text: "Connecting to Google...",
@@ -220,6 +253,7 @@ function Login() {
             });
 
             setIsLoading(false);
+            setActiveAction(null); // NEW
         }
     }
 
@@ -241,6 +275,7 @@ function Login() {
 
         setNotice(null);
         setIsLoading(true);
+        setActiveAction("login"); // NEW
 
         try {
             const { error } = await supabase.auth.signInWithPassword({
@@ -260,6 +295,7 @@ function Login() {
             });
         } finally {
             setIsLoading(false);
+            setActiveAction(null); // NEW
         }
     }
 
@@ -279,6 +315,7 @@ function Login() {
 
         setNotice(null);
         setIsLoading(true);
+        setActiveAction("reset"); // NEW
 
         try {
             const { error } =
@@ -305,6 +342,7 @@ function Login() {
             });
         } finally {
             setIsLoading(false);
+            setActiveAction(null); // NEW
         }
     }
 
@@ -456,36 +494,42 @@ function Login() {
                             </div>
                         )}
 
+                        {/* Google button: loads only when Google is the active action */}
                         <button
                             type="button"
                             onClick={handleGoogleLogin}
                             disabled={isLoading}
+                            aria-busy={activeAction === "google"}
                             className={`mt-8 flex min-h-12 w-full items-center justify-center gap-3 rounded-md border border-slate-300 bg-white text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 ${focusRing}`}
                         >
-                            <svg
-                                className="h-5 w-5 shrink-0"
-                                viewBox="0 0 48 48"
-                                aria-hidden="true"
-                            >
-                                <path
-                                    fill="#4285F4"
-                                    d="M43.6 24.5c0-1.4-.1-2.8-.4-4.1H24v7.8h11a9.4 9.4 0 0 1-4.1 6.2v5.1h6.7c3.9-3.6 6-8.9 6-15z"
-                                />
-                                <path
-                                    fill="#34A853"
-                                    d="M24 44c5.5 0 10.1-1.8 13.5-4.8l-6.7-5.1c-1.8 1.2-4.1 2-6.8 2-5.3 0-9.8-3.6-11.4-8.4H5.7v5.3A20 20 0 0 0 24 44z"
-                                />
-                                <path
-                                    fill="#FBBC05"
-                                    d="M12.6 27.7a12 12 0 0 1 0-7.4V15H5.7a20 20 0 0 0 0 18z"
-                                />
-                                <path
-                                    fill="#EA4335"
-                                    d="M24 11.9c3 0 5.7 1 7.8 3.1l5.8-5.8A19.5 19.5 0 0 0 24 4 20 20 0 0 0 5.7 15l6.9 5.3c1.6-4.8 6.1-8.4 11.4-8.4z"
-                                />
-                            </svg>
+                            {activeAction === "google" ? (
+                                <Spinner className="h-5 w-5 shrink-0 text-emerald-800" />
+                            ) : (
+                                <svg
+                                    className="h-5 w-5 shrink-0"
+                                    viewBox="0 0 48 48"
+                                    aria-hidden="true"
+                                >
+                                    <path
+                                        fill="#4285F4"
+                                        d="M43.6 24.5c0-1.4-.1-2.8-.4-4.1H24v7.8h11a9.4 9.4 0 0 1-4.1 6.2v5.1h6.7c3.9-3.6 6-8.9 6-15z"
+                                    />
+                                    <path
+                                        fill="#34A853"
+                                        d="M24 44c5.5 0 10.1-1.8 13.5-4.8l-6.7-5.1c-1.8 1.2-4.1 2-6.8 2-5.3 0-9.8-3.6-11.4-8.4H5.7v5.3A20 20 0 0 0 24 44z"
+                                    />
+                                    <path
+                                        fill="#FBBC05"
+                                        d="M12.6 27.7a12 12 0 0 1 0-7.4V15H5.7a20 20 0 0 0 0 18z"
+                                    />
+                                    <path
+                                        fill="#EA4335"
+                                        d="M24 11.9c3 0 5.7 1 7.8 3.1l5.8-5.8A19.5 19.5 0 0 0 24 4 20 20 0 0 0 5.7 15l6.9 5.3c1.6-4.8 6.1-8.4 11.4-8.4z"
+                                    />
+                                </svg>
+                            )}
 
-                            {isLoading
+                            {activeAction === "google"
                                 ? "Please wait..."
                                 : "Continue with Google"}
                         </button>
@@ -546,16 +590,23 @@ function Login() {
                                     disabled={isLoading}
                                     className={`rounded font-semibold text-emerald-800 hover:underline disabled:opacity-50 ${focusRing}`}
                                 >
-                                    Forgot password?
+                                    {activeAction === "reset"
+                                        ? "Sending link..."
+                                        : "Forgot password?"}
                                 </button>
                             </div>
 
+                            {/* Login button: loads only when Login is the active action */}
                             <button
                                 type="submit"
                                 disabled={isLoading}
-                                className={`flex min-h-12 w-full items-center justify-center rounded-md bg-emerald-800 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-900 disabled:cursor-not-allowed disabled:opacity-60 ${focusRing}`}
+                                aria-busy={activeAction === "login"}
+                                className={`flex min-h-12 w-full items-center justify-center gap-2 rounded-md bg-emerald-800 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-900 disabled:cursor-not-allowed disabled:opacity-60 ${focusRing}`}
                             >
-                                {isLoading ? "Please wait..." : "Log in"}
+                                {activeAction === "login" && <Spinner />}
+                                {activeAction === "login"
+                                    ? "Please wait..."
+                                    : "Log in"}
                             </button>
                         </form>
 

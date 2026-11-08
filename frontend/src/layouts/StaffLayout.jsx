@@ -1,10 +1,32 @@
+import { NavLink, Link, useNavigate } from "react-router-dom";
+import { ThemeToggle } from "../context/ThemeContext";
+import { confirmAndSignOut } from "../lib/signOut";
 
-import { NavLink, Link } from "react-router-dom";
-
-const defaultLinks = [
-  { label: "Dashboard", to: "/staff/dashboard", icon: "grid" },
-  { label: "Complaint Queue", to: "/staff/complaints", icon: "file" },
-];
+const navigationByRole = {
+  "LGU Staff": [
+    { label: "Dashboard", to: "/staff/dashboard", icon: "grid" },
+    { label: "Complaint Queue", to: "/staff/complaints", icon: "file" },
+    { label: "Complaint History", to: "/staff/complaints/history", icon: "history" },
+    { label: "Escalation Requests", to: "/staff/escalations", icon: "inbox" },
+  ],
+  "Barangay Head": [
+    { label: "Dashboard", to: "/barangay/dashboard", icon: "grid" },
+    { label: "Assigned Complaints", to: "/barangay/complaints", icon: "file" },
+  ],
+  "Department Head": [
+    { label: "Dashboard", to: "/department/dashboard", icon: "grid" },
+    { label: "Personnel Directory", to: "/department/personnel", icon: "users" },
+    {
+      label: "Personnel Assignments",
+      to: "/department/assignments",
+      icon: "users",
+    },
+  ],
+  "Department Personnel": [
+    { label: "Dashboard", to: "/personnel/dashboard", icon: "grid" },
+    { label: "My Assignments", to: "/personnel/assignments", icon: "file" },
+  ],
+};
 
 const focusRing =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2";
@@ -30,6 +52,25 @@ function Icon({ name, className = "h-5 w-5" }) {
         <rect x="14" y="14" width="7" height="7" rx="1.5" />
       </>
     ),
+    users: (
+      <>
+        <path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+        <circle cx="10" cy="7" r="4" />
+        <path d="M20 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+      </>
+    ),
+    inbox: (
+      <>
+        <path d="M4 4h16v12h-4l-2 3h-4l-2-3H4z" />
+        <path d="M4 12h4l2 3h4l2-3h4" />
+      </>
+    ),
+    history: (
+      <>
+        <path d="M3 12a9 9 0 1 0 2.64-6.36L3 8" />
+        <path d="M3 3v5h5M12 7v5l3 2" />
+      </>
+    ),
     file: (
       <>
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
@@ -41,6 +82,12 @@ function Icon({ name, className = "h-5 w-5" }) {
       <>
         <path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z" />
         <path d="m9 12 2 2 4-4" />
+      </>
+    ),
+    logout: (
+      <>
+        <path d="M10 17l5-5-5-5M15 12H3" />
+        <path d="M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7" />
       </>
     ),
   };
@@ -77,7 +124,7 @@ function SidebarLink({ link }) {
   return (
     <NavLink
       to={link.to}
-      end={isDashboard}
+      end={isDashboard || link.to === "/staff/complaints"}
       className={({ isActive }) =>
         `flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors ${focusRing} ${
           isActive
@@ -99,9 +146,13 @@ export default function StaffLayout({
   children,
   title = "Staff Portal",
   role = "LGU Staff",
-  links = defaultLinks,
+  links: customLinks,
 }) {
+  const navigate = useNavigate();
+  const links = customLinks ?? navigationByRole[role] ?? [];
   const isDashboard = (to) => to.endsWith("/dashboard");
+
+  const handleSignOut = () => confirmAndSignOut(navigate);
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 antialiased">
@@ -109,6 +160,8 @@ export default function StaffLayout({
 
         {/* Desktop Sidebar */}
         <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-slate-200 bg-white lg:flex">
+
+          {/* Logo */}
           <Link
             to="/"
             className={`m-4 rounded-xl p-2 ${focusRing}`}
@@ -117,6 +170,7 @@ export default function StaffLayout({
             <Logo subtitle={role} />
           </Link>
 
+          {/* Main Menu */}
           <div className="px-5 pb-3 pt-4">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
               Main Menu
@@ -125,21 +179,23 @@ export default function StaffLayout({
 
           <nav
             aria-label="Main menu"
-            className="space-y-1 px-4"
+            className="flex-1 space-y-1 px-4"
           >
             {links.map((link) => (
               <SidebarLink key={link.to} link={link} />
             ))}
           </nav>
 
+          {/* Sign Out - Bottom of Sidebar */}
           <div className="mt-auto border-t border-slate-100 p-4">
-            <Link
-              to="/"
-              className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 ${focusRing}`}
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-slate-600 transition-colors hover:bg-red-50 hover:text-red-700 ${focusRing}`}
             >
-              <Icon name="back" className="h-[18px] w-[18px]" />
-              Back to home
-            </Link>
+              <Icon name="logout" className="h-[18px] w-[18px]" />
+              Sign out
+            </button>
           </div>
         </aside>
 
@@ -168,6 +224,19 @@ export default function StaffLayout({
                 {title}
               </h1>
             </div>
+            <div className="ml-auto flex items-center gap-2">
+              <ThemeToggle />
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className={`inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 lg:hidden ${focusRing}`}
+                aria-label="Sign out"
+              >
+                <Icon name="logout" className="h-4 w-4" />
+                <span className="hidden sm:inline">Sign out</span>
+              </button>
+            </div>
+
           </header>
 
           {/* Page Content */}
@@ -197,7 +266,7 @@ export default function StaffLayout({
           <NavLink
             key={link.to}
             to={link.to}
-            end={isDashboard(link.to)}
+            end={isDashboard(link.to) || link.to === "/staff/complaints"}
             className={({ isActive }) =>
               `flex min-w-0 flex-1 flex-col items-center gap-1 px-2 py-2.5 text-xs font-medium transition-colors ${focusRing} focus-visible:ring-inset ${
                 isActive

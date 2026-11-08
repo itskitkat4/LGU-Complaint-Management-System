@@ -1,5 +1,7 @@
 
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { ThemeToggle } from "../context/ThemeContext";
+import { confirmAndSignOut } from "../lib/signOut";
 
 export const navigation = [
   { label: "Overview", short: "Overview", icon: "grid", path: "/citizen/dashboard" },
@@ -81,10 +83,11 @@ export function Panel({ title, description, action, children }) {
 export default function CitizenLayout({
   title = "Dashboard",
   profile,
-  onLogout,
   children,
 }) {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const handleSignOut = () => confirmAndSignOut(navigate);
 
   const activePath = navigation
     .filter(item => pathname === item.path || pathname.startsWith(`${item.path}/`))
@@ -134,7 +137,7 @@ export default function CitizenLayout({
                 <p className="truncate text-xs text-slate-500">{profile?.email}</p>
               </div>
             </div>
-            <button onClick={onLogout} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-600 hover:bg-red-50 hover:text-red-700 ${focusRing}`}>
+            <button onClick={handleSignOut} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-600 hover:bg-red-50 hover:text-red-700 ${focusRing}`}>
               <Icon name="logout" /> Sign out
             </button>
           </div>
@@ -145,7 +148,8 @@ export default function CitizenLayout({
             <div className="lg:hidden"><Logo /></div>
             <p className="hidden text-base font-semibold lg:block">{title}</p>
             <div className="flex items-center gap-3">
-              <button onClick={onLogout} className={`rounded-lg p-2 text-slate-500 hover:bg-slate-100 lg:hidden ${focusRing}`} aria-label="Sign out">
+              <ThemeToggle />
+              <button onClick={handleSignOut} className={`rounded-lg p-2 text-slate-500 hover:bg-slate-100 lg:hidden ${focusRing}`} aria-label="Sign out">
                 <Icon name="logout" />
               </button>
               {!onSubmitPage && (

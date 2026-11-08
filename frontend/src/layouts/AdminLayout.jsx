@@ -1,6 +1,8 @@
 
 import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { ThemeToggle } from "../context/ThemeContext";
+import { confirmAndSignOut } from "../lib/signOut";
 
 const navigation = [
   { label: "Overview", icon: "grid", path: "/admin/dashboard" },
@@ -66,10 +68,11 @@ function SidebarLink({ item, onClick }) {
 export default function AdminLayout({
   title = "Admin Dashboard",
   profile,
-  onLogout,
   children,
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const navigate = useNavigate();
+  const handleSignOut = () => confirmAndSignOut(navigate);
   const displayName =
     profile?.full_name || profile?.name || profile?.email?.split("@")[0] || "Administrator";
   const firstName = displayName.split(" ")[0];
@@ -91,7 +94,7 @@ export default function AdminLayout({
               <span className="block text-xs text-slate-500">System Administrator</span>
             </span>
           </div>
-          <button onClick={onLogout} className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-slate-600 hover:bg-red-50 hover:text-red-700 ${focusRing}`}>
+          <button onClick={handleSignOut} className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-slate-600 hover:bg-red-50 hover:text-red-700 ${focusRing}`}>
             <Icon name="logout" /> Sign Out
           </button>
         </div>
@@ -112,7 +115,8 @@ export default function AdminLayout({
           <div className="hidden text-sm text-slate-500 sm:block">
             Welcome, <span className="font-semibold text-slate-800">{firstName}</span>
           </div>
-          <button onClick={onLogout} className={`rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 lg:hidden ${focusRing}`}>Sign Out</button>
+          <ThemeToggle />
+          <button onClick={handleSignOut} className={`rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 lg:hidden ${focusRing}`}>Sign Out</button>
         </header>
 
         {mobileMenuOpen && (

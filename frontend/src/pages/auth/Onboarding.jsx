@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
@@ -19,6 +18,14 @@ const steps = [
   { label: "Select your barangay", done: false },
   { label: "Start submitting complaints", done: false },
 ];
+
+function Skeleton({ className = "" }) {
+  return (
+    <div
+      className={`animate-pulse bg-slate-200 motion-reduce:animate-none ${className}`}
+    />
+  );
+}
 
 function Check({ className = "h-3 w-3" }) {
   return (
@@ -96,7 +103,7 @@ function ReadOnlyField({
 function Onboarding() {
   const navigate = useNavigate();
 
-  const [user, setUser] = useState(null);
+  const [user] = useState(null);
   const [barangays, setBarangays] = useState([]);
   const [barangayId, setBarangayId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -123,14 +130,13 @@ function Onboarding() {
         }
 
         const [barangayList, profileResponse] = await Promise.all([
-          getBarangays(),
-          getCitizenProfile(),
-        ]);
+  getBarangays(),
+  getCitizenProfile(),
+]);
 
-        if (!active) return;
+console.log("CURRENT CITIZEN PROFILE:", profileResponse);
 
-        setUser(session.user);
-        setBarangays(barangayList);
+setBarangays(barangayList);;
 
         // If the citizen already completed onboarding,
         // send them directly to the dashboard.
@@ -196,19 +202,6 @@ function Onboarding() {
     .toUpperCase();
 
   const noBarangays = barangays.length === 0 && !error;
-
-  if (loading) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-white">
-        <div role="status" className="text-center">
-          <div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-emerald-800/20 border-t-emerald-800 motion-reduce:animate-none" />
-          <p className="mt-4 text-sm text-slate-600">
-            Loading your profile…
-          </p>
-        </div>
-      </main>
-    );
-  }
 
   return (
     <div className="grid min-h-screen bg-white font-sans text-slate-900 antialiased lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
@@ -315,165 +308,210 @@ function Onboarding() {
         </header>
 
         <main className="flex flex-1 items-center justify-center px-6 pt-4 pb-12 sm:px-10">
-          <section
-            className="w-full max-w-md"
-            aria-labelledby="onboarding-title"
-          >
-            <h1
-              id="onboarding-title"
-              className="text-3xl font-semibold tracking-tight text-slate-900"
-            >
-              Complete your profile
-            </h1>
+          {loading ? (
+            /* Skeleton while the session, barangays and profile load */
+            <div role="status" className="w-full max-w-md">
+              <span className="sr-only">Loading your profile…</span>
 
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              Select your barangay of residence to complete your
-              citizen account setup.
-            </p>
+              <div aria-hidden="true">
+                {/* Title + subtitle */}
+                <Skeleton className="h-9 w-64 max-w-full rounded-md" />
+                <Skeleton className="mt-3 h-4 w-full rounded" />
+                <Skeleton className="mt-2 h-4 w-3/4 rounded" />
 
-            {/* Signed-in account */}
-            <div className="mt-8 flex items-center gap-3 rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-sm font-semibold text-emerald-900">
-                {initial}
-              </span>
+                {/* Signed-in account card */}
+                <div className="mt-8 flex items-center gap-3 rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
+                  <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <Skeleton className="h-4 w-40 rounded" />
+                    <Skeleton className="h-3 w-52 max-w-full rounded" />
+                  </div>
+                </div>
 
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-slate-900">
-                  {fullName || "Your Google account"}
-                </p>
+                {/* Divider */}
+                <div className="my-7 flex items-center gap-4">
+                  <span className="h-px flex-1 bg-slate-200" />
+                  <Skeleton className="h-3 w-20 rounded" />
+                  <span className="h-px flex-1 bg-slate-200" />
+                </div>
 
-                <p className="truncate text-xs text-slate-500">
-                  {user?.email || "Signed in with Google"}
-                </p>
+                {/* Fields */}
+                <div className="space-y-5">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i}>
+                      <Skeleton className="mb-2 h-4 w-28 rounded" />
+                      <Skeleton className="h-12 w-full rounded-md" />
+                    </div>
+                  ))}
+
+                  {/* Submit button */}
+                  <Skeleton className="h-12 w-full rounded-md" />
+                </div>
+
+                <Skeleton className="mx-auto mt-8 h-3 w-4/5 rounded" />
               </div>
             </div>
-
-            <div className="my-7 flex items-center gap-4 text-xs text-slate-500">
-              <span className="h-px flex-1 bg-slate-200" />
-              your details
-              <span className="h-px flex-1 bg-slate-200" />
-            </div>
-
-            {error && (
-              <div
-                role="alert"
-                className="mb-5 flex items-start gap-3 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-800"
+          ) : (
+            <section
+              className="w-full max-w-md"
+              aria-labelledby="onboarding-title"
+            >
+              <h1
+                id="onboarding-title"
+                className="text-3xl font-semibold tracking-tight text-slate-900"
               >
-                <svg
-                  viewBox="0 0 24 24"
-                  className="mt-0.5 h-5 w-5 shrink-0"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  aria-hidden="true"
-                >
-                  <path
-                    d="M12 8v5m0 3.5v.01M10.3 4.2 2.9 17a2 2 0 0 0 1.7 3h14.8a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0Z"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
+                Complete your profile
+              </h1>
 
-                <p className="flex-1">{error}</p>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Select your barangay of residence to complete your
+                citizen account setup.
+              </p>
 
-                <button
-                  type="button"
-                  onClick={() => setError("")}
-                  aria-label="Dismiss message"
-                  className={`-mr-1 rounded p-0.5 opacity-60 transition-opacity hover:opacity-100 ${focusRing}`}
+              {/* Signed-in account */}
+              <div className="mt-8 flex items-center gap-3 rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-sm font-semibold text-emerald-900">
+                  {initial}
+                </span>
+
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-slate-900">
+                    {fullName || "Your Google account"}
+                  </p>
+
+                  <p className="truncate text-xs text-slate-500">
+                    {user?.email || "Signed in with Google"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="my-7 flex items-center gap-4 text-xs text-slate-500">
+                <span className="h-px flex-1 bg-slate-200" />
+                your details
+                <span className="h-px flex-1 bg-slate-200" />
+              </div>
+
+              {error && (
+                <div
+                  role="alert"
+                  className="mb-5 flex items-start gap-3 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-800"
                 >
                   <svg
                     viewBox="0 0 24 24"
-                    className="h-4 w-4"
+                    className="mt-0.5 h-5 w-5 shrink-0"
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth="2"
+                    strokeWidth="1.8"
                     aria-hidden="true"
                   >
                     <path
-                      d="m6 6 12 12M18 6 6 18"
+                      d="M12 8v5m0 3.5v.01M10.3 4.2 2.9 17a2 2 0 0 0 1.7 3h14.8a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0Z"
                       strokeLinecap="round"
+                      strokeLinejoin="round"
                     />
                   </svg>
-                </button>
-              </div>
-            )}
 
-            <form
-              onSubmit={handleSubmit}
-              className="space-y-5"
-            >
-              <ReadOnlyField
-                id="fullName"
-                label="Full name"
-                value={fullName}
-                placeholder="Not provided"
-              />
+                  <p className="flex-1">{error}</p>
 
-              <ReadOnlyField
-                id="email"
-                label="Email address"
-                type="email"
-                value={user?.email || ""}
-                placeholder="Not available"
-              />
-
-              <Field id="barangay" label="Barangay *">
-                <select
-                  id="barangay"
-                  value={barangayId}
-                  onChange={(event) => {
-                    setBarangayId(event.target.value);
-                    setError("");
-                  }}
-                  aria-describedby={
-                    noBarangays ? "barangay-help" : undefined
-                  }
-                  disabled={barangays.length === 0 || saving}
-                  required
-                  className={inputClass}
-                >
-                  <option value="">
-                    Select your barangay
-                  </option>
-
-                  {barangays.map((barangay) => (
-                    <option
-                      key={barangay.id}
-                      value={barangay.id}
-                    >
-                      {barangay.name}
-                    </option>
-                  ))}
-                </select>
-
-                {noBarangays && (
-                  <p
-                    id="barangay-help"
-                    className="mt-2 flex items-center gap-2 text-sm text-amber-700"
+                  <button
+                    type="button"
+                    onClick={() => setError("")}
+                    aria-label="Dismiss message"
+                    className={`-mr-1 rounded p-0.5 opacity-60 transition-opacity hover:opacity-100 ${focusRing}`}
                   >
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
-                    No barangays are available yet.
-                  </p>
-                )}
-              </Field>
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="h-4 w-4"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="m6 6 12 12M18 6 6 18"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              )}
 
-              <button
-                type="submit"
-                disabled={!barangayId || saving}
-                className={`flex min-h-12 w-full items-center justify-center rounded-md bg-emerald-800 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-900 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500 disabled:shadow-none ${focusRing}`}
+              <form
+                onSubmit={handleSubmit}
+                className="space-y-5"
               >
-                {saving
-                  ? "Saving profile..."
-                  : "Complete profile"}
-              </button>
-            </form>
+                <ReadOnlyField
+                  id="fullName"
+                  label="Full name"
+                  value={fullName}
+                  placeholder="Not provided"
+                />
 
-            <p className="mt-8 text-center text-xs leading-6 text-slate-500">
-              Your barangay is used only to direct your complaints
-              to the right office.
-            </p>
-          </section>
+                <ReadOnlyField
+                  id="email"
+                  label="Email address"
+                  type="email"
+                  value={user?.email || ""}
+                  placeholder="Not available"
+                />
+
+                <Field id="barangay" label="Barangay *">
+                  <select
+                    id="barangay"
+                    value={barangayId}
+                    onChange={(event) => {
+                      setBarangayId(event.target.value);
+                      setError("");
+                    }}
+                    aria-describedby={
+                      noBarangays ? "barangay-help" : undefined
+                    }
+                    disabled={barangays.length === 0 || saving}
+                    required
+                    className={inputClass}
+                  >
+                    <option value="">
+                      Select your barangay
+                    </option>
+
+                    {barangays.map((barangay) => (
+                      <option
+                        key={barangay.id}
+                        value={barangay.id}
+                      >
+                        {barangay.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  {noBarangays && (
+                    <p
+                      id="barangay-help"
+                      className="mt-2 flex items-center gap-2 text-sm text-amber-700"
+                    >
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+                      No barangays are available yet.
+                    </p>
+                  )}
+                </Field>
+
+                <button
+                  type="submit"
+                  disabled={!barangayId || saving}
+                  className={`flex min-h-12 w-full items-center justify-center rounded-md bg-emerald-800 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-900 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500 disabled:shadow-none ${focusRing}`}
+                >
+                  {saving
+                    ? "Saving profile..."
+                    : "Complete profile"}
+                </button>
+              </form>
+
+              <p className="mt-8 text-center text-xs leading-6 text-slate-500">
+                Your barangay is used only to direct your complaints
+                to the right office.
+              </p>
+            </section>
+          )}
         </main>
 
         <footer className="px-6 py-6 text-center text-xs text-slate-500 sm:px-10">

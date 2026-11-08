@@ -1,5 +1,5 @@
-
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Swal from "sweetalert2";
 import AdminLayout from "../../layouts/AdminLayout";
 import { Icon, inputClass } from "../../components/ui";
 import {
@@ -13,6 +13,10 @@ const INITIAL_FORM = {
   name: "",
   description: "",
 };
+
+function Skeleton({ className = "" }) {
+  return <div className={`animate-pulse bg-slate-200 ${className}`} />;
+}
 
 export default function DepartmentPage() {
   const [departments, setDepartments] = useState([]);
@@ -162,11 +166,19 @@ export default function DepartmentPage() {
   const handleDelete = async (id) => {
     if (deletingId !== null) return;
 
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this department? This action cannot be undone."
-    );
+    const { isConfirmed } = await Swal.fire({
+      title: "Delete department?",
+      text: "This action cannot be undone.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Delete department",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#b91c1c",
+      cancelButtonColor: "#64748b",
+      reverseButtons: true,
+    });
 
-    if (!confirmed) return;
+    if (!isConfirmed) return;
 
     try {
       setDeletingId(id);
@@ -200,7 +212,7 @@ export default function DepartmentPage() {
             type="button"
             onClick={handleAdd}
             disabled={saving}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Icon name="plus" className="h-4 w-4" />
             Add Department
@@ -214,9 +226,13 @@ export default function DepartmentPage() {
               Total Departments
             </p>
 
-            <p className="mt-2 text-3xl font-bold text-slate-900">
-              {loading ? "—" : departments.length}
-            </p>
+            {loading ? (
+              <Skeleton className="mt-2 h-9 w-16 rounded" />
+            ) : (
+              <p className="mt-2 text-3xl font-bold text-slate-900">
+                {departments.length}
+              </p>
+            )}
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-white p-5">
@@ -224,9 +240,13 @@ export default function DepartmentPage() {
               Search Results
             </p>
 
-            <p className="mt-2 text-3xl font-bold text-slate-900">
-              {loading ? "—" : filteredDepartments.length}
-            </p>
+            {loading ? (
+              <Skeleton className="mt-2 h-9 w-16 rounded" />
+            ) : (
+              <p className="mt-2 text-3xl font-bold text-slate-900">
+                {filteredDepartments.length}
+              </p>
+            )}
           </div>
         </section>
 
@@ -321,7 +341,7 @@ export default function DepartmentPage() {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="inline-flex items-center justify-center rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex items-center justify-center rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {saving
                     ? "Saving..."
@@ -409,12 +429,44 @@ export default function DepartmentPage() {
 
           {/* Loading state */}
           {loading ? (
-            <div className="px-5 py-12 text-center">
-              <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-slate-200 border-t-blue-700" />
+            <div role="status" className="overflow-x-auto">
+              <span className="sr-only">Loading department records...</span>
 
-              <p className="mt-3 text-sm text-slate-500">
-                Loading department records...
-              </p>
+              <table
+                className="w-full min-w-[650px] text-left text-sm"
+                aria-hidden="true"
+              >
+                <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-5 py-3.5">Department Name</th>
+                    <th className="px-5 py-3.5">Description</th>
+                    <th className="px-5 py-3.5">Department ID</th>
+                    <th className="px-5 py-3.5">Actions</th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-slate-100">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <tr key={i}>
+                      <td className="px-5 py-4">
+                        <Skeleton className="h-4 w-44 rounded" />
+                      </td>
+                      <td className="px-5 py-4">
+                        <Skeleton className="h-4 w-64 max-w-full rounded" />
+                      </td>
+                      <td className="px-5 py-4">
+                        <Skeleton className="h-3 w-24 rounded" />
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-2">
+                          <Skeleton className="h-7 w-12 rounded-lg" />
+                          <Skeleton className="h-7 w-14 rounded-lg" />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           ) : !error ? (
             <div className="overflow-x-auto">

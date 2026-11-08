@@ -1,9 +1,16 @@
-
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { getCitizenProfile } from "../../lib/api";
 import CitizenLayout, { Icon, Panel, focusRing } from "../../layouts/CitizenLayout";
+
+function Skeleton({ className = "" }) {
+  return (
+    <div
+      className={`animate-pulse bg-slate-200 motion-reduce:animate-none ${className}`}
+    />
+  );
+}
 
 function StatCard({ label, value, description, icon, tone }) {
   return (
@@ -65,24 +72,85 @@ export default function CitizenDashboard() {
     return () => { active = false; };
   }, [navigate]);
 
-  async function handleLogout() {
-    setError("");
-    const { error: logoutError } = await supabase.auth.signOut();
-
-    if (logoutError) {
-      setError(logoutError.message || "Unable to sign out.");
-      return;
-    }
-
-    navigate("/login", { replace: true });
-  }
-
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <div role="status" className="text-center">
-          <div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-emerald-800/20 border-t-emerald-800" />
-          <p className="mt-4 text-sm text-slate-600">Loading your dashboard…</p>
+      <div role="status" className="min-h-screen bg-slate-50">
+        <span className="sr-only">Loading dashboard...</span>
+
+        <div aria-hidden="true">
+          {/* Top bar */}
+          <div className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-9 w-9 rounded-lg" />
+              <Skeleton className="h-5 w-36 rounded" />
+            </div>
+            <Skeleton className="h-9 w-9 rounded-full" />
+          </div>
+
+          <div className="mx-auto max-w-7xl space-y-6 p-6">
+            {/* Welcome */}
+            <div>
+              <Skeleton className="h-8 w-72 max-w-full rounded" />
+              <Skeleton className="mt-3 h-4 w-full max-w-xl rounded" />
+            </div>
+
+            {/* Stat cards */}
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="rounded-xl border border-slate-200 bg-white p-5"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <Skeleton className="h-4 w-28 rounded" />
+                    <Skeleton className="h-9 w-9 rounded-lg" />
+                  </div>
+                  <Skeleton className="mt-4 h-9 w-14 rounded" />
+                  <Skeleton className="mt-3 h-3 w-36 rounded" />
+                </div>
+              ))}
+            </div>
+
+            {/* Panels */}
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(280px,1fr)]">
+              <div className="rounded-xl border border-slate-200 bg-white p-5">
+                <Skeleton className="h-5 w-44 rounded" />
+                <Skeleton className="mt-2 h-4 w-60 max-w-full rounded" />
+                <Skeleton className="mt-5 h-48 w-full rounded-lg" />
+              </div>
+
+              <div className="space-y-6">
+                <div className="rounded-xl border border-slate-200 bg-white p-5">
+                  <Skeleton className="h-5 w-32 rounded" />
+                  <Skeleton className="mt-2 h-4 w-48 rounded" />
+                  <div className="mt-5 space-y-4">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="flex items-center gap-3">
+                        <Skeleton className="h-10 w-10 shrink-0 rounded-lg" />
+                        <div className="flex-1 space-y-2">
+                          <Skeleton className="h-4 w-36 rounded" />
+                          <Skeleton className="h-3 w-28 rounded" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-5">
+                  <Skeleton className="h-5 w-40 rounded" />
+                  <Skeleton className="mt-2 h-4 w-44 rounded" />
+                  <div className="mt-5 space-y-4">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <div key={i} className="flex justify-between gap-4">
+                        <Skeleton className="h-4 w-20 rounded" />
+                        <Skeleton className="h-4 w-36 rounded" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -93,7 +161,7 @@ export default function CitizenDashboard() {
   const firstName = displayName.split(" ")[0];
 
   return (
-    <CitizenLayout title="Dashboard" profile={profile} onLogout={handleLogout}>
+    <CitizenLayout title="Dashboard" profile={profile}>
       {error && (
         <div role="alert" className="flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           <p>{error}</p>

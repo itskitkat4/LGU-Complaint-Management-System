@@ -1,12 +1,16 @@
-
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
-import { getAuthenticatedProfile } from "../../lib/api";
+import { getAdminDashboardSummary, getAuthenticatedProfile } from "../../lib/api";
+import { confirmAndSignOut } from "../../lib/signOut";
 import AdminLayout from "../../layouts/AdminLayout";
 
 const focusRing =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2";
+
+function Skeleton({ className = "" }) {
+  return <div className={`animate-pulse bg-slate-200 ${className}`} />;
+}
 
 function Icon({ name, className = "h-5 w-5" }) {
   const common = {
@@ -28,13 +32,18 @@ function Icon({ name, className = "h-5 w-5" }) {
   return <svg {...common}>{paths[name] || null}</svg>;
 }
 
-function StatCard({ label, value, description, icon }) {
+function StatCard({ label, value, description, icon, loading = false }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm font-medium text-slate-500">{label}</p>
-          <h3 className="mt-2 text-3xl font-bold text-slate-900">{value}</h3>
+
+          {loading ? (
+            <Skeleton className="mt-2 h-9 w-16 rounded" />
+          ) : (
+            <h3 className="mt-2 text-3xl font-bold text-slate-900">{value}</h3>
+          )}
         </div>
         <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
           <Icon name={icon} />
@@ -60,6 +69,7 @@ function Panel({ title, description, children }) {
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
+  const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -92,6 +102,9 @@ export default function AdminDashboard() {
         }
 
         if (active) setProfile(adminProfile);
+
+        const dashboardSummary = await getAdminDashboardSummary();
+        if (active) setSummary(dashboardSummary);
       } catch (err) {
         if (active) setError(err.message || "Unable to load administrator profile.");
       } finally {
@@ -104,22 +117,81 @@ export default function AdminDashboard() {
   }, [navigate]);
 
   async function handleLogout() {
-    const { error: logoutError } = await supabase.auth.signOut();
-
-    if (logoutError) {
-      setError(logoutError.message || "Unable to sign out.");
-      return;
-    }
-
-    navigate("/login", { replace: true });
+    await confirmAndSignOut(navigate);
   }
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <div role="status" className="text-center">
-          <div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-emerald-100 border-t-emerald-700" />
-          <p className="mt-3 text-sm text-slate-500">Loading admin portal...</p>
+      <div role="status" className="min-h-screen bg-slate-50">
+        <span className="sr-only">Loading admin portal...</span>
+
+        <div aria-hidden="true">
+          {/* Top bar */}
+          <div className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-9 w-9 rounded-lg" />
+              <Skeleton className="h-5 w-36 rounded" />
+            </div>
+            <Skeleton className="h-9 w-9 rounded-full" />
+          </div>
+
+          <div className="mx-auto max-w-7xl space-y-6 p-6">
+            {/* Welcome */}
+            <div>
+              <Skeleton className="h-4 w-36 rounded" />
+              <Skeleton className="mt-3 h-8 w-72 max-w-full rounded" />
+              <Skeleton className="mt-3 h-4 w-full max-w-xl rounded" />
+            </div>
+
+            {/* Stat cards */}
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <Skeleton className="h-4 w-24 rounded" />
+                      <Skeleton className="mt-3 h-9 w-16 rounded" />
+                    </div>
+                    <Skeleton className="h-11 w-11 rounded-xl" />
+                  </div>
+                  <Skeleton className="mt-4 h-3 w-40 rounded" />
+                </div>
+              ))}
+            </div>
+
+            {/* Panels */}
+            <div className="grid gap-6 xl:grid-cols-3">
+              <div className="space-y-6 xl:col-span-2">
+                <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <Skeleton className="h-5 w-52 rounded" />
+                  <Skeleton className="mt-2 h-4 w-72 max-w-full rounded" />
+                  <Skeleton className="mt-5 h-44 w-full rounded-xl" />
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <Skeleton className="h-5 w-52 rounded" />
+                  <Skeleton className="mt-2 h-4 w-72 max-w-full rounded" />
+                  <Skeleton className="mt-5 h-24 w-full rounded-xl" />
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <Skeleton className="h-5 w-44 rounded" />
+                <Skeleton className="mt-2 h-4 w-48 rounded" />
+                <div className="mt-5 space-y-4">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i}>
+                      <Skeleton className="h-3 w-16 rounded" />
+                      <Skeleton className="mt-2 h-4 w-40 rounded" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -141,7 +213,7 @@ export default function AdminDashboard() {
 
 
   return (
-    <AdminLayout title="Overview" profile={profile} onLogout={handleLogout}>
+    <AdminLayout title="Overview" profile={profile}>
       {error && (
         <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {error}
@@ -164,12 +236,11 @@ export default function AdminDashboard() {
           <p className="mt-1 text-sm text-slate-500">Summary of registered system information.</p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Total Users" value="—" description="Registered system accounts" icon="users" />
-          <StatCard label="Total Complaints" value="—" description="Complaints recorded in the system" icon="grid" />
-          <StatCard label="Departments" value="—" description="Registered LGU departments" icon="building" />
-          <StatCard label="Barangays" value="—" description="Registered barangays" icon="map" />
+          <StatCard label="Total Users" value={summary?.users ?? 0} description="Registered system accounts" icon="users" />
+          <StatCard label="Total Complaints" value={summary?.complaints ?? 0} description="Complaints recorded in the system" icon="grid" />
+          <StatCard label="Departments" value={summary?.departments ?? 0} description="Registered LGU departments" icon="building" />
+          <StatCard label="Barangays" value={summary?.barangays ?? 0} description="Registered barangays" icon="map" />
         </div>
-        <p className="mt-3 text-xs text-slate-400">Statistics will be connected to the backend.</p>
       </section>
 
       <div className="grid gap-6 xl:grid-cols-3">

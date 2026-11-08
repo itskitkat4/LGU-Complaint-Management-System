@@ -1,6 +1,13 @@
-
 import { Link } from "react-router-dom";
 import CitizenLayout from "../../layouts/CitizenLayout";
+
+function Skeleton({ className = "" }) {
+  return (
+    <div
+      className={`animate-pulse bg-slate-200 motion-reduce:animate-none ${className}`}
+    />
+  );
+}
 
 function BellIcon({ className = "h-6 w-6" }) {
   return (
@@ -49,6 +56,8 @@ function NotificationIcon() {
 }
 
 export default function Notifications() {
+  const loading = false; // TODO: replace with useState/fetch state once connected to the backend
+
   return (
     <CitizenLayout title="Notifications">
       <section className="space-y-6">
@@ -67,10 +76,14 @@ export default function Notifications() {
             </p>
           </div>
 
-          <div className="inline-flex w-fit items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600">
-            <BellIcon className="h-5 w-5 text-emerald-700" />
-            No unread notifications
-          </div>
+          {loading ? (
+            <Skeleton className="h-11 w-52 rounded-lg" />
+          ) : (
+            <div className="inline-flex w-fit items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600">
+              <BellIcon className="h-5 w-5 text-emerald-700" />
+              No unread notifications
+            </div>
+          )}
         </div>
 
         {/* Recent Activity */}
@@ -84,26 +97,47 @@ export default function Notifications() {
             </p>
           </div>
 
-          {/* Empty State */}
-          <div className="flex flex-col items-center justify-center px-6 py-16 text-center sm:py-20">
-            <NotificationIcon />
+          {loading ? (
+            <div role="status" className="divide-y divide-slate-100">
+              <span className="sr-only">Loading notifications...</span>
 
-            <h3 className="mt-5 text-lg font-semibold text-slate-900">
-              You're all caught up!
-            </h3>
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div
+                  key={i}
+                  aria-hidden="true"
+                  className="flex items-start gap-4 px-5 py-4 sm:px-6"
+                >
+                  <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-56 max-w-full rounded" />
+                    <Skeleton className="h-3 w-full max-w-md rounded" />
+                  </div>
+                  <Skeleton className="h-3 w-14 shrink-0 rounded" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            /* Empty State */
+            <div className="flex flex-col items-center justify-center px-6 py-16 text-center sm:py-20">
+              <NotificationIcon />
 
-            <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
-              You don't have any notifications yet. We'll notify you
-              whenever there are updates about your complaints.
-            </p>
+              <h3 className="mt-5 text-lg font-semibold text-slate-900">
+                You're all caught up!
+              </h3>
 
-            <Link
-              to="/citizen/complaints"
-              className="mt-6 inline-flex items-center justify-center rounded-lg bg-emerald-800 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2"
-            >
-              View My Complaints
-            </Link>
-          </div>
+              <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
+                You don't have any notifications yet. We'll notify you
+                whenever there are updates about your complaints.
+              </p>
+
+              <Link
+                to="/citizen/complaints"
+                className="mt-6 inline-flex items-center justify-center rounded-lg bg-emerald-800 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2"
+              >
+                View My Complaints
+              </Link>
+            </div>
+          )}
         </section>
 
         {/* Information */}
@@ -124,7 +158,7 @@ export default function Notifications() {
           </div>
         </section>
 
-      </section>
+      </section>  
     </CitizenLayout>
   );
 }

@@ -33,3 +33,71 @@ select {
 #root {
   min-height: 100vh;
 }
+
+html,
+body {
+  background-color: #f8fafc;
+  transition: background-color 180ms ease, color 180ms ease;
+}
+
+/* Shared dark palette for the Tailwind utility colors used across all portals. */
+.dark body,
+.dark [class~="bg-slate-50"] {
+  background-color: #0f172a;
+}
+
+.dark [class~="bg-white"],
+.dark [class~="bg-white/95"],
+.dark [class~="bg-white/90"] {
+  background-color: #1e293b;
+}
+
+.dark [class~="bg-slate-100"] { background-color: #334155; }
+.dark [class~="bg-slate-200"] { background-color: #475569; }
+.dark [class~="bg-emerald-50"] { background-color: #064e3b; }
+.dark [class~="bg-emerald-100"] { background-color: #065f46; }
+.dark [class~="bg-red-50"] { background-color: #450a0a; }
+.dark [class~="bg-amber-50"] { background-color: #451a03; }
+.dark [class~="bg-blue-50"] { background-color: #172554; }
+
+.dark [class~="text-slate-900"],
+.dark [class~="text-slate-800"] { color: #f1f5f9; }
+.dark [class~="text-slate-700"] { color: #e2e8f0; }
+.dark [class~="text-slate-600"],
+.dark [class~="text-slate-500"] { color: #cbd5e1; }
+.dark [class~="text-slate-400"] { color: #94a3b8; }
+.dark [class~="text-emerald-900"] { color: #d1fae5; }
+.dark [class~="text-emerald-800"] { color: #a7f3d0; }
+.dark [class~="text-emerald-700"] { color: #6ee7b7; }
+.dark [class~="text-red-800"],
+.dark [class~="text-red-700"] { color: #fca5a5; }
+.dark [class~="text-amber-800"],
+.dark [class~="text-amber-700"] { color: #fcd34d; }
+
+.dark [class~="border-slate-100"],
+.dark [class~="border-slate-200"],
+.dark [class~="border-slate-300"] { border-color: #334155; }
+.dark [class~="border-emerald-200"] { border-color: #065f46; }
+.dark [class~="border-red-200"] { border-color: #7f1d1d; }
+
+.dark [class~="hover:bg-slate-50"]:hover,
+.dark [class~="hover:bg-slate-100"]:hover { background-color: #334155; }
+.dark [class~="hover:bg-red-50"]:hover { background-color: #7f1d1d; }
+
+.dark input,
+.dark textarea,
+.dark select {
+  color: #f1f5f9;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #94a3b8;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html,
+  body {
+    transition: none;
+  }
+}

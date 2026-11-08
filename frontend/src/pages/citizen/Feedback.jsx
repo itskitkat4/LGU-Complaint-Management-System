@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import Swal from "sweetalert2";
 import CitizenLayout from "../../layouts/CitizenLayout";
 import { Icon, focusRing, inputClass, primaryBtn } from "../../components/ui";
 
@@ -17,7 +18,12 @@ export default function Feedback() {
 
   function submit(event) {
     event.preventDefault();
-    alert("Feedback UI demo only. The feedback API is not connected yet.");
+    void Swal.fire({
+      title: "Demo only",
+      text: "Feedback submission is not connected to the backend yet.",
+      icon: "info",
+      confirmButtonColor: "#047857",
+    });
   }
 
   return (

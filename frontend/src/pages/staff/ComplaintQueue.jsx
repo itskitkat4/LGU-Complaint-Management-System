@@ -1,80 +1,204 @@
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { getStaffComplaints } from "../../lib/api";
 import StaffLayout from "../../layouts/StaffLayout";
 import { Icon, StatusBadge, focusRing } from "../../components/ui";
+import ComplaintReview from "./ComplaintReview";
 
-const complaints = [
-  { id: "BS-DEMO-001", title: "Uncollected garbage", category: "Sanitation", barangay: "Sample Barangay", date: "Demo date", status: "Pending Review" },
-  { id: "BS-DEMO-002", title: "Damaged road section", category: "Infrastructure", barangay: "Sample Barangay", date: "Demo date", status: "Pending Review" },
-  { id: "BS-DEMO-003", title: "Streetlight not working", category: "Public Safety", barangay: "Sample Barangay", date: "Demo date", status: "Under Review" },
-];
+const headings = ["Complaint", "Category", "Barangay", "Date Submitted", "Status", "Action"];
+
+function Skeleton({ className = "" }) {
+  return (
+    <div
+      className={`animate-pulse bg-slate-200 motion-reduce:animate-none ${className}`}
+    />
+  );
+}
 
 export default function ComplaintQueue() {
+  const [complaints, setComplaints] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [selectedComplaintId, setSelectedComplaintId] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    async function loadComplaints() {
+      try {
+        setLoading(true);
+        setError("");
+
+        const result = await getStaffComplaints();
+
+        setComplaints(result.data || []);
+      } catch (err) {
+        setError(err.message || "Failed to load complaints.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadComplaints();
+  }, [refreshKey]);
+
   return (
-    <StaffLayout title="Complaint Queue" role="LGU Staff">
+    <StaffLayout>
       <div className="space-y-6">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-            Incoming complaints
-          </h2>
-          <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">
-            Review the details before routing each complaint.
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+            Complaint Queue
+          </h1>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            Review complaints submitted by citizens.
           </p>
         </div>
 
-        <section className="rounded-xl border border-slate-200 bg-white">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[750px] text-left text-sm">
-              <caption className="sr-only">Incoming complaints awaiting review</caption>
-              <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                <tr>
-                  {["Reference", "Complaint", "Category", "Barangay", "Status", "Action"].map((h) => (
-                    <th key={h} scope="col" className="px-5 py-3.5">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {complaints.map((c) => (
-                  <tr key={c.id} className="transition-colors hover:bg-slate-50">
-                    <td className="px-5 py-4 font-medium text-slate-900">{c.id}</td>
-                    <td className="px-5 py-4 text-slate-700">{c.title}</td>
-                    <td className="px-5 py-4 text-slate-600">{c.category}</td>
-                    <td className="px-5 py-4 text-slate-600">{c.barangay}</td>
-                    <td className="px-5 py-4">
-                      <StatusBadge status={c.status} />
-                    </td>
-                    <td className="px-5 py-4">
-                      <Link
-                        to={`/staff/complaints/${c.id}`}
-                        className={`inline-flex items-center gap-1 rounded text-sm font-semibold text-emerald-800 hover:underline ${focusRing}`}
-                        aria-label={`Review ${c.id}`}
-                      >
-                        Review <Icon name="arrow" className="h-4 w-4" />
-                      </Link>
-                    </td>
+        {loading && (
+          <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div role="status" className="overflow-x-auto">
+              <span className="sr-only">Loading complaints...</span>
+
+              <table
+                className="w-full min-w-[800px] text-left text-sm"
+                aria-hidden="true"
+              >
+                <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <tr>
+                    {headings.map((heading) => (
+                      <th key={heading} className="px-5 py-3.5">
+                        {heading}
+                      </th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
 
-          {complaints.length === 0 && (
-            <div className="m-5 rounded-lg border border-dashed border-slate-300 bg-slate-50/60 px-5 py-10 text-center">
-              <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-white text-slate-500 ring-1 ring-slate-200">
-                <Icon name="file" className="h-6 w-6" />
-              </span>
-              <h3 className="mt-4 text-sm font-semibold text-slate-900">No incoming complaints</h3>
-              <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-500">
-                New citizen complaints will appear here for review.
-              </p>
+                <tbody className="divide-y divide-slate-100">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <tr key={i}>
+                      <td className="px-5 py-4">
+                        <Skeleton className="h-4 w-48 rounded" />
+                        <Skeleton className="mt-2 h-3 w-32 rounded" />
+                      </td>
+                      <td className="px-5 py-4">
+                        <Skeleton className="h-4 w-28 rounded" />
+                      </td>
+                      <td className="px-5 py-4">
+                        <Skeleton className="h-4 w-24 rounded" />
+                      </td>
+                      <td className="px-5 py-4">
+                        <Skeleton className="h-4 w-20 rounded" />
+                      </td>
+                      <td className="px-5 py-4">
+                        <Skeleton className="h-5 w-24 rounded-full" />
+                      </td>
+                      <td className="px-5 py-4">
+                        <Skeleton className="h-4 w-14 rounded" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          )}
-        </section>
+          </section>
+        )}
 
-        <p className="text-xs text-slate-500">
-          Demo records only. Live queue and filtering need API integration.
-        </p>
+        {error && (
+          <div
+            role="alert"
+            className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+          >
+            {error}
+          </div>
+        )}
+
+        {!loading && !error && complaints.length === 0 && (
+          <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/60 px-5 py-12 text-center">
+            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-white text-slate-500 ring-1 ring-slate-200">
+              <Icon name="file" className="h-6 w-6" />
+            </span>
+            <p className="mt-4 text-sm font-semibold text-slate-900">
+              No complaints pending review.
+            </p>
+            <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-500">
+              New citizen submissions will appear here.
+            </p>
+          </div>
+        )}
+
+        {!loading && !error && complaints.length > 0 && (
+          <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[800px] text-left text-sm">
+                <caption className="sr-only">Complaints pending review</caption>
+
+                <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <tr>
+                    {headings.map((heading) => (
+                      <th key={heading} scope="col" className="px-5 py-3.5">
+                        {heading}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-slate-100">
+                  {complaints.map((complaint) => (
+                    <tr
+                      key={complaint.id}
+                      className="transition-colors hover:bg-slate-50"
+                    >
+                      <td className="px-5 py-4">
+                        <p className="font-semibold text-slate-900">
+                          {complaint.title}
+                        </p>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          {complaint.id}
+                        </p>
+                      </td>
+
+                      <td className="px-5 py-4 text-slate-600">
+                        {complaint.category?.name || "—"}
+                      </td>
+
+                      <td className="px-5 py-4 text-slate-600">
+                        {complaint.barangay?.name || "—"}
+                      </td>
+
+                      <td className="px-5 py-4 text-slate-600">
+                        {complaint.created_at
+                          ? new Date(complaint.created_at).toLocaleDateString()
+                          : "—"}
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <StatusBadge status={complaint.status} />
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedComplaintId(complaint.id)}
+                          className={`inline-flex items-center gap-1 rounded text-sm font-semibold text-emerald-800 hover:underline ${focusRing}`}
+                        >
+                          Review <Icon name="arrow" className="h-4 w-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
+        {selectedComplaintId && (
+          <ComplaintReview
+            complaintId={selectedComplaintId}
+            onClose={() => {
+              setSelectedComplaintId(null);
+              setRefreshKey((current) => current + 1);
+            }}
+          />
+        )}
       </div>
     </StaffLayout>
   );

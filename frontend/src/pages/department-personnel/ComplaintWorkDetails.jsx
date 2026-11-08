@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import Swal from "sweetalert2";
 import StaffLayout from "../../layouts/StaffLayout";
 import {
   Icon,
@@ -18,7 +19,12 @@ export default function ComplaintWorkDetails() {
 
   function submit(event) {
     event.preventDefault();
-    alert("Demo only. Resolution, evidence upload, and API submission are not connected.");
+    void Swal.fire({
+      title: "Demo only",
+      text: "Resolution submission, evidence uploads, and the API connection are not available yet.",
+      icon: "info",
+      confirmButtonColor: "#047857",
+    });
   }
 
   return (
