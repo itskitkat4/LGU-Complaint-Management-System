@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import CitizenLayout from "../../layouts/CitizenLayout";
 import { Icon, focusRing, inputClass, primaryBtn, secondaryBtn, } from "../../components/ui";
+import { useAuth } from "../../context/AuthContext";
 import { getComplaintCategories, getBarangays, createComplaint, } from "../../lib/api";
 
 function Skeleton({ className = "" }) {
@@ -29,6 +30,12 @@ function Field({ id, label, children }) {
 
 export default function CreateComplaint() {
   const navigate = useNavigate();
+  const { profile } = useAuth();
+  const displayName =
+    profile?.full_name ||
+    profile?.email?.split("@")[0] ||
+    "Citizen";
+  const firstName = displayName.split(" ")[0];
 
   const [form, setForm] = useState({
     title: "",
@@ -41,10 +48,57 @@ export default function CreateComplaint() {
   const [categories, setCategories] = useState([]);
   const [barangays, setBarangays] = useState([]);
   const [evidence, setEvidence] = useState(null);
+  const [submissionMode, setSubmissionMode] = useState("selection");
 
   const [loadingFormData, setLoadingFormData] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [chatInput, setChatInput] = useState("");
+  const [messages, setMessages] = useState(() => [
+    {
+      id: 0,
+      sender: "assistant",
+      text: `Hello, ${firstName}. How may I help you today?\nWelcome to BantaySerbisyo. Please choose an option below.`,
+    },
+  ]);
+
+  const quickOptions = [
+    "Submit a Complaint",
+    "How does this work?",
+    "FAQ",
+    "How to submit a complaint",
+    "Track my complaint",
+  ];
+
+  function addChatMessage(text, reply) {
+    setMessages((previous) => [
+      ...previous,
+      { id: previous.length, sender: "citizen", text },
+      { id: previous.length + 1, sender: "assistant", text: reply },
+    ]);
+  }
+
+  function handleQuickOption(option) {
+    const reply =
+      option === "Submit a Complaint"
+        ? "Sure! I can help you submit a complaint. What issue would you like to report?"
+        : `${option} will be implemented in a later phase.`;
+
+    addChatMessage(option, reply);
+  }
+
+  function handleChatSubmit(event) {
+    event.preventDefault();
+    const message = chatInput.trim();
+
+    if (!message) return;
+
+    addChatMessage(
+      message,
+      "Thanks for your message. Chat assistance will be available in a later phase. You can use the complaint form below to submit your complaint."
+    );
+    setChatInput("");
+  }
 
   // Load active categories and all available barangays.
   useEffect(() => {
@@ -136,43 +190,158 @@ export default function CreateComplaint() {
             Back to dashboard
           </Link>
 
-          <h1 className="mt-4 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-            Submit a complaint
-          </h1>
-
-          <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">
-            Describe your concern and provide the necessary information.
-          </p>
+          {submissionMode === "selection" ? (
+            <>
+              <h1 className="mt-4 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+                Submit a Complaint
+              </h1>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">
+                Choose how you want to report your concern.
+              </p>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => setSubmissionMode("selection")}
+                className={`mt-4 inline-flex items-center gap-1.5 rounded text-sm font-semibold text-emerald-800 hover:underline ${focusRing}`}
+              >
+                <Icon name="back" className="h-4 w-4" />
+                Back
+              </button>
+              <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+                {submissionMode === "assistant"
+                  ? "AI Complaint Assistant"
+                  : "Manual Complaint Form"}
+              </h1>
+            </>
+          )}
         </div>
 
-        {/* AI assistant notice */}
-        <div className="flex items-start gap-4 rounded-xl border border-emerald-100 bg-emerald-50 p-5">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-800 text-white">
-            <Icon name="sparkle" className="h-5 w-5" />
-          </span>
+        {submissionMode === "selection" && (
+          <section
+            aria-label="Choose a complaint submission method"
+            className="grid gap-5 md:grid-cols-2"
+          >
+            <div className="flex flex-col rounded-xl border border-emerald-100 bg-white p-6">
+              <h2 className="text-base font-semibold text-slate-900">
+                AI Complaint Assistant
+              </h2>
+              <p className="mt-2 flex-1 text-sm leading-6 text-slate-600">
+                Chat with the AI assistant. It will guide you through the complaint process and help organize your complaint details.
+              </p>
+              <button
+                type="button"
+                onClick={() => setSubmissionMode("assistant")}
+                className={`${primaryBtn} mt-5 w-full sm:w-auto`}
+              >
+                Use AI Assistant
+              </button>
+            </div>
 
-          <div>
-            <h2 className="text-sm font-semibold text-emerald-950">
-              AI Complaint Assistant
-            </h2>
+            <div className="flex flex-col rounded-xl border border-slate-200 bg-white p-6">
+              <h2 className="text-base font-semibold text-slate-900">
+                Manual Complaint Form
+              </h2>
+              <p className="mt-2 flex-1 text-sm leading-6 text-slate-600">
+                Fill out the complaint form yourself using the existing form fields and evidence upload.
+              </p>
+              <button
+                type="button"
+                onClick={() => setSubmissionMode("manual")}
+                className={`${primaryBtn} mt-5 w-full sm:w-auto`}
+              >
+                Use Manual Form
+              </button>
+            </div>
+          </section>
+        )}
 
-            <p className="mt-1 text-sm leading-6 text-emerald-900/80">
-              AI assistance for organizing your complaint details will be
-              available in a future update. For now, you can submit your
-              complaint using this form.
-            </p>
-
-            <span className="mt-3 inline-block rounded-full bg-white px-2.5 py-0.5 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-100">
-              AI integration planned
+        {/* Citizen AI assistant chat UI */}
+        {submissionMode === "assistant" && (
+          <section
+            aria-labelledby="assistant-heading"
+            className="overflow-hidden rounded-xl border border-emerald-100 bg-white"
+          >
+          <div className="flex items-center gap-3 border-b border-emerald-100 bg-emerald-50 px-5 py-4">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-800 text-white">
+              <Icon name="sparkle" className="h-5 w-5" />
             </span>
+            <div>
+              <h2 id="assistant-heading" className="text-sm font-semibold text-emerald-950">
+                BantaySerbisyo Assistant
+              </h2>
+              <p className="text-xs text-emerald-900/70">Complaint support</p>
+            </div>
           </div>
-        </div>
+
+          <div
+            aria-live="polite"
+            aria-relevant="additions"
+            className="max-h-96 space-y-4 overflow-y-auto p-5"
+            role="log"
+          >
+            {messages.map((message) => (
+              <div
+                key={message.id}
+                className={`flex ${message.sender === "citizen" ? "justify-end" : "justify-start"}`}
+              >
+                <p
+                  className={`max-w-[85%] whitespace-pre-line rounded-2xl px-4 py-3 text-sm leading-6 sm:max-w-[75%] ${
+                    message.sender === "citizen"
+                      ? "rounded-br-md bg-emerald-800 text-white"
+                      : "rounded-bl-md bg-slate-100 text-slate-800"
+                  }`}
+                >
+                  {message.text}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="space-y-4 border-t border-slate-100 px-5 py-4">
+            <div className="flex flex-wrap gap-2">
+              {quickOptions.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => handleQuickOption(option)}
+                  className={`rounded-full border border-emerald-200 bg-white px-3 py-2 text-left text-xs font-medium text-emerald-900 transition-colors hover:bg-emerald-50 sm:text-sm ${focusRing}`}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+
+            <form onSubmit={handleChatSubmit} className="flex gap-2">
+              <label htmlFor="assistant-message" className="sr-only">
+                Type a message
+              </label>
+              <input
+                id="assistant-message"
+                value={chatInput}
+                onChange={(event) => setChatInput(event.target.value)}
+                placeholder="Type your message..."
+                className={inputClass}
+              />
+              <button
+                type="submit"
+                disabled={!chatInput.trim()}
+                className={`${primaryBtn} shrink-0 disabled:cursor-not-allowed disabled:opacity-50`}
+              >
+                Send
+              </button>
+            </form>
+          </div>
+          </section>
+        )}
 
         {/* Complaint form */}
-        <form
-          onSubmit={handleSubmit}
-          className="rounded-xl border border-slate-200 bg-white"
-        >
+        {submissionMode === "manual" && (
+          <form
+            onSubmit={handleSubmit}
+            className="rounded-xl border border-slate-200 bg-white"
+          >
           <div className="border-b border-slate-100 px-6 py-5">
             <h2 className="text-base font-semibold text-slate-900">
               Complaint details
@@ -377,7 +546,8 @@ export default function CreateComplaint() {
               )}
             </button>
           </div>
-        </form>
+          </form>
+        )}
       </div>
     </CitizenLayout>
   );

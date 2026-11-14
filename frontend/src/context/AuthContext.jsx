@@ -1,28 +1,74 @@
 
-import { createContext, useContext, useEffect, useState } from "react";
+/* eslint-disable react-refresh/only-export-components */
+
+import {
+    createContext,
+    useCallback,
+    useContext,
+    useEffect,
+    useRef,
+    useState,
+} from "react";
 import { supabase } from "../lib/supabase";
 import { getAuthenticatedProfile } from "../lib/api";
 
 const AuthContext = createContext(null);
+
+export function useAuth() {
+    const context = useContext(AuthContext);
+
+    if (!context) {
+        throw new Error("useAuth must be used within an AuthProvider.");
+    }
+
+    return context;
+}
 
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
 
+    const requestId = useRef(0);
+
+    const refreshProfile = useCallback(async () => {
+        const currentRequest = ++requestId.current;
+
+        try {
+            const result = await getAuthenticatedProfile();
+
+            if (currentRequest !== requestId.current) {
+                return null;
+            }
+
+            const updatedProfile = result?.profile || null;
+
+            setProfile(updatedProfile);
+            setLoading(false);
+
+            return updatedProfile;
+        } catch (error) {
+            if (currentRequest === requestId.current) {
+                setLoading(false);
+            }
+
+            throw error;
+        }
+    }, []);
+
     useEffect(() => {
         let mounted = true;
-        let requestId = 0;
 
         async function loadAuthentication(session) {
-            const currentRequest = ++requestId;
+            const currentRequest = ++requestId.current;
 
             if (!session?.access_token) {
-                if (mounted) {
+                if (mounted && currentRequest === requestId.current) {
                     setUser(null);
                     setProfile(null);
                     setLoading(false);
                 }
+
                 return;
             }
 
@@ -34,31 +80,31 @@ export function AuthProvider({ children }) {
             try {
                 const result = await getAuthenticatedProfile();
 
-                if (mounted && currentRequest === requestId) {
-                    setProfile(result.profile || null);
+                if (!mounted || currentRequest !== requestId.current) {
+                    return;
                 }
+
+                setProfile(result?.profile || null);
             } catch (error) {
                 console.error("Authentication verification failed:", error);
 
-                if (mounted && currentRequest === requestId) {
+                if (mounted && currentRequest === requestId.current) {
                     setProfile(null);
                 }
             } finally {
-                if (mounted && currentRequest === requestId) {
+                if (mounted && currentRequest === requestId.current) {
                     setLoading(false);
                 }
             }
         }
 
-        // Listen for Supabase authentication changes.
         const {
             data: { subscription },
         } = supabase.auth.onAuthStateChange((_event, session) => {
             void loadAuthentication(session);
         });
 
-        // Check the existing session when the application loads.
-        supabase.auth.getSession().then(({ data, error }) => {
+        void supabase.auth.getSession().then(({ data, error }) => {
             if (error) {
                 console.error("Failed to retrieve session:", error);
             }
@@ -70,7 +116,7 @@ export function AuthProvider({ children }) {
 
         return () => {
             mounted = false;
-            requestId++;
+            requestId.current += 1;
             subscription.unsubscribe();
         };
     }, []);
@@ -80,7 +126,8 @@ export function AuthProvider({ children }) {
         profile,
         role: profile?.role || null,
         loading,
-        isAuthenticated: !!user,
+        isAuthenticated: Boolean(user),
+        refreshProfile,
     };
 
     return (
@@ -88,16 +135,4 @@ export function AuthProvider({ children }) {
             {children}
         </AuthContext.Provider>
     );
-}
-
-export function useAuth() {
-    const context = useContext(AuthContext);
-
-    if (!context) {
-        throw new Error(
-            "useAuth must be used inside an AuthProvider."
-        );
-    }
-
-    return context;
 }

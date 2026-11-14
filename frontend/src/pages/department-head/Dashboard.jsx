@@ -1,4 +1,5 @@
 
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import StaffLayout from "../../layouts/StaffLayout";
 import {
@@ -8,32 +9,33 @@ import {
   focusRing,
   primaryBtn,
 } from "../../components/ui";
+import { getDepartmentMonitoring } from "../../lib/api";
 
-const stats = [
+const statDefinitions = [
   {
+    key: "awaiting_assignment",
     label: "Awaiting Assignment",
-    value: "7",
     description: "Complaints needing personnel assignment",
     icon: "clock",
     tone: "bg-amber-50 text-amber-700",
   },
   {
+    key: "assigned",
     label: "Assigned",
-    value: "15",
     description: "Assigned to department personnel",
     icon: "users",
     tone: "bg-slate-100 text-slate-700",
   },
   {
+    key: "in_progress",
     label: "In Progress",
-    value: "10",
     description: "Complaints currently being handled",
     icon: "progress",
     tone: "bg-sky-50 text-sky-700",
   },
   {
+    key: "resolved",
     label: "Resolved",
-    value: "21",
     description: "Complaints marked as resolved",
     icon: "check",
     tone: "bg-emerald-50 text-emerald-700",
@@ -41,6 +43,12 @@ const stats = [
 ];
 
 const actions = [
+  {
+    to: "/department/monitoring",
+    icon: "chart",
+    title: "Monitor Department Work",
+    text: "Review current handlers, complaint status, and external escalations.",
+  },
   {
     to: "/department/assignments",
     icon: "users",
@@ -50,6 +58,25 @@ const actions = [
 ];
 
 export default function Dashboard() {
+  const [statistics, setStatistics] = useState(null);
+  const [statsError, setStatsError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+
+    getDepartmentMonitoring(1)
+      .then((result) => {
+        if (active) setStatistics(result.statistics || {});
+      })
+      .catch((error) => {
+        if (active) setStatsError(error.message || "Unable to load department statistics.");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   return (
     <StaffLayout title="Department Dashboard" role="Department Head">
       <div className="space-y-8">
@@ -94,15 +121,12 @@ export default function Dashboard() {
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {stats.map((stat) => (
-              <StatCard key={stat.label} {...stat} />
+            {statDefinitions.map((stat) => (
+              <StatCard key={stat.label} {...stat} value={statistics?.[stat.key] ?? "—"} />
             ))}
           </div>
 
-          <p className="mt-3 text-xs text-slate-400">
-            Sample figures for UI development. Actual statistics will come
-            from the backend.
-          </p>
+          {statsError && <p role="alert" className="mt-3 text-sm text-red-700">{statsError}</p>}
         </section>
 
         {/* Quick Actions */}

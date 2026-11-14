@@ -8,6 +8,8 @@ const navigationByRole = {
     { label: "Complaint Queue", to: "/staff/complaints", icon: "file" },
     { label: "Complaint History", to: "/staff/complaints/history", icon: "history" },
     { label: "Escalation Requests", to: "/staff/escalations", icon: "inbox" },
+    { label: "Resolution Review", to: "/staff/resolutions", icon: "file" },
+    { label: "Reports & Analytics", to: "/staff/reports", icon: "chart" },
   ],
   "Barangay Head": [
     { label: "Dashboard", to: "/barangay/dashboard", icon: "grid" },
@@ -15,6 +17,7 @@ const navigationByRole = {
   ],
   "Department Head": [
     { label: "Dashboard", to: "/department/dashboard", icon: "grid" },
+    { label: "Department Monitoring", to: "/department/monitoring", icon: "chart" },
     { label: "Personnel Directory", to: "/department/personnel", icon: "users" },
     {
       label: "Personnel Assignments",
@@ -69,6 +72,12 @@ function Icon({ name, className = "h-5 w-5" }) {
       <>
         <path d="M3 12a9 9 0 1 0 2.64-6.36L3 8" />
         <path d="M3 3v5h5M12 7v5l3 2" />
+      </>
+    ),
+    chart: (
+      <>
+        <path d="M3 3v18h18" />
+        <path d="m19 9-5 5-4-4-5 5" />
       </>
     ),
     file: (
@@ -150,13 +159,17 @@ export default function StaffLayout({
 }) {
   const navigate = useNavigate();
   const links = customLinks ?? navigationByRole[role] ?? [];
+  const isReportsPage = title === "Reports & Analytics";
   const isDashboard = (to) => to.endsWith("/dashboard");
 
   const handleSignOut = () => confirmAndSignOut(navigate);
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 antialiased">
-      <div className="flex min-h-screen">
+<div
+  className={`min-h-screen bg-slate-50 font-sans text-slate-900 antialiased ${
+    isReportsPage ? "reports-print-layout" : ""
+  }`}
+>      <div className="flex min-h-screen">
 
         {/* Desktop Sidebar */}
         <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-slate-200 bg-white lg:flex">

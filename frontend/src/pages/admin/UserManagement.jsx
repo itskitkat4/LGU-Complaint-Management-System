@@ -54,9 +54,6 @@ export default function UserManagement() {
   // Retrieve staff accounts
   async function loadStaffAccounts() {
     try {
-      setLoading(true);
-      setError("");
-
       const staff = await getStaffAccounts();
       setUsers(staff);
     } catch (error) {
@@ -66,9 +63,11 @@ export default function UserManagement() {
     }
   }
 
-  useEffect(() => {
-    loadStaffAccounts();
-  }, []);
+ useEffect(() => {
+  queueMicrotask(() => {
+    void loadStaffAccounts();
+  });
+}, []);
 
   useEffect(() => {
     if (!showForm) return undefined;

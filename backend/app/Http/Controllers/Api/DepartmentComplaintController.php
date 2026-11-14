@@ -125,9 +125,7 @@ class DepartmentComplaintController extends Controller
 
         // Only active Department Personnel can access this queue.
         if (
-            !$profile ||
-            !$profile->is_active ||
-            $profile->role !== 'Department_Personnel'
+            !$profile || !$profile->is_active || $profile->role !== 'Department_Personnel'
         ) {
             return response()->json([
                 'message' => 'Only active Department Personnel can access this complaint queue.',
@@ -167,6 +165,143 @@ class DepartmentComplaintController extends Controller
             ],
         ]);
     }
+
+    public function personnelShow(Request $request, string $complaintId)
+    {
+        $user = $request->attributes->get('supabase_user');
+
+        if (!$user || empty($user['id'])) {
+            return response()->json([
+                'message' => 'Authenticated user information is missing.',
+            ], 401);
+        }
+
+        $profile = Profile::find($user['id']);
+
+        if (
+            !$profile ||
+            !$profile->is_active ||
+            $profile->role !== 'Department_Personnel'
+        ) {
+            return response()->json([
+                'message' => 'Only active Department Personnel can view complaint details.',
+            ], 403);
+        }
+
+        if (!$profile->department_id) {
+            return response()->json([
+                'message' => 'Your account has no assigned department.',
+            ], 422);
+        }
+
+        $complaint = Complaint::whereKey($complaintId)
+            ->whereHas('activeAssignment', function ($query) use ($profile) {
+                $query->where('assigned_to', $profile->id)
+                    ->where('assignment_level', 'lgu')
+                    ->where('department_id', $profile->department_id)
+                    ->whereNull('ended_at');
+            })
+            ->with([
+                'citizen',
+                'category',
+                'barangay',
+                'attachments',
+                'activeAssignment.assignee',
+            ])
+            ->first();
+
+        if (!$complaint) {
+            return response()->json([
+                'message' => 'Complaint not found or is not currently assigned to you.',
+            ], 404);
+        }
+
+        return response()->json([
+            'message' => 'Complaint details retrieved successfully.',
+            'data' => $complaint,
+        ]);
+    }
+
+    public function startWork(Request $request, string $complaintId)
+    {
+        $user = $request->attributes->get('supabase_user');
+
+        if (!$user || empty($user['id'])) {
+            return response()->json([
+                'message' => 'Authenticated user information is missing.',
+            ], 401);
+        }
+
+        $profile = Profile::find($user['id']);
+
+        if (
+            !$profile ||
+            !$profile->is_active ||
+            $profile->role !== 'Department_Personnel'
+        ) {
+            return response()->json([
+                'message' => 'Only active Department Personnel can start working on complaints.',
+            ], 403);
+        }
+
+        $complaint = Complaint::find($complaintId);
+
+        if (!$complaint) {
+            return response()->json([
+                'message' => 'Complaint not found.',
+            ], 404);
+        }
+
+        $assignment = ComplaintAssignment::where('complaint_id', $complaint->id)
+            ->where('assigned_to', $profile->id)
+            ->where('assignment_level', 'lgu')
+            ->where('department_id', $profile->department_id)
+            ->whereNull('ended_at')
+            ->first();
+
+        if (!$assignment) {
+            return response()->json([
+                'message' => 'This complaint is not currently assigned to you.',
+            ], 403);
+        }
+
+        if ($complaint->status !== 'assigned') {
+            return response()->json([
+                'message' => 'Only assigned complaints can be started.',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($complaint, $profile) {
+            $lockedComplaint = Complaint::whereKey($complaint->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($lockedComplaint->status !== 'assigned') {
+                throw new \Illuminate\Http\Exceptions\HttpResponseException(
+                    response()->json([
+                        'message' => 'This complaint has already been started or its status has changed.',
+                    ], 422)
+                );
+            }
+
+            $lockedComplaint->status = 'in_progress';
+            $lockedComplaint->save();
+
+            ComplaintUpdate::create([
+                'complaint_id' => $lockedComplaint->id,
+                'updated_by' => $profile->id,
+                'old_status' => 'assigned',
+                'new_status' => 'in_progress',
+                'comment' => 'Department Personnel started working on the complaint.',
+            ]);
+        });
+
+        return response()->json([
+            'message' => 'Complaint work started successfully.',
+            'data' => $complaint->fresh(),
+        ]);
+    }
+
     public function assignPersonnel(Request $request, string $complaintId)
     {
         // Get the authenticated Department Head.
@@ -183,15 +318,6 @@ class DepartmentComplaintController extends Controller
         if (!$profile || $profile->role !== 'Department_Head') {
             return response()->json([
                 'message' => 'Only Department Heads can assign personnel.',
-            ], 403);
-        }
-        if (
-            !$profile ||
-            !$profile->is_active ||
-            $profile->role !== 'Department_Head'
-        ) {
-            return response()->json([
-                'message' => 'Only active Department Heads can assign personnel.',
             ], 403);
         }
 

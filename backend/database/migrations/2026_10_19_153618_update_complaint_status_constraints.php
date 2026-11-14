@@ -8,9 +8,6 @@ return new class extends Migration
 {
     public function up(): void
     {
-        /*
-         * Update allowed complaint statuses.
-         */
         DB::statement("
             ALTER TABLE complaints
             DROP CONSTRAINT IF EXISTS complaints_status_check
@@ -26,14 +23,10 @@ return new class extends Migration
                 'declined',
                 'assigned',
                 'in_progress',
-                'pending_review',
                 'resolved'
             ))
         ");
 
-        /*
-         * Require a reason when a complaint is declined.
-         */
         DB::statement("
             ALTER TABLE complaints
             DROP CONSTRAINT IF EXISTS complaints_rejection_reason_check
@@ -51,13 +44,9 @@ return new class extends Migration
             )
         ");
 
-        /*
-         * Update status history constraints.
-         */
         DB::statement("
             ALTER TABLE complaint_updates
-            DROP CONSTRAINT IF EXISTS
-                complaint_updates_new_status_check
+            DROP CONSTRAINT IF EXISTS complaint_updates_new_status_check
         ");
 
         DB::statement("
@@ -70,15 +59,13 @@ return new class extends Migration
                 'declined',
                 'assigned',
                 'in_progress',
-                'pending_review',
                 'resolved'
             ))
         ");
 
         DB::statement("
             ALTER TABLE complaint_updates
-            DROP CONSTRAINT IF EXISTS
-                complaint_updates_old_status_check
+            DROP CONSTRAINT IF EXISTS complaint_updates_old_status_check
         ");
 
         DB::statement("
@@ -93,7 +80,6 @@ return new class extends Migration
                     'declined',
                     'assigned',
                     'in_progress',
-                    'pending_review',
                     'resolved'
                 )
             )
@@ -102,14 +88,9 @@ return new class extends Migration
 
     public function down(): void
     {
-        /*
-         * Restore the original complaint status constraints.
-         * Rollback may fail if records use the new statuses.
-         */
         DB::statement("
             ALTER TABLE complaint_updates
-            DROP CONSTRAINT IF EXISTS
-                complaint_updates_new_status_check
+            DROP CONSTRAINT IF EXISTS complaint_updates_new_status_check
         ");
 
         DB::statement("
@@ -118,18 +99,17 @@ return new class extends Migration
             CHECK (new_status IN (
                 'submitted',
                 'under_review',
+                'accepted',
+                'declined',
                 'assigned',
                 'in_progress',
-                'resolved',
-                'closed',
-                'rejected'
+                'resolved'
             ))
         ");
 
         DB::statement("
             ALTER TABLE complaint_updates
-            DROP CONSTRAINT IF EXISTS
-                complaint_updates_old_status_check
+            DROP CONSTRAINT IF EXISTS complaint_updates_old_status_check
         ");
 
         DB::statement("
@@ -140,11 +120,11 @@ return new class extends Migration
                 OR old_status IN (
                     'submitted',
                     'under_review',
+                    'accepted',
+                    'declined',
                     'assigned',
                     'in_progress',
-                    'resolved',
-                    'closed',
-                    'rejected'
+                    'resolved'
                 )
             )
         ");
@@ -160,11 +140,11 @@ return new class extends Migration
             CHECK (status IN (
                 'submitted',
                 'under_review',
+                'accepted',
+                'declined',
                 'assigned',
                 'in_progress',
-                'resolved',
-                'closed',
-                'rejected'
+                'resolved'
             ))
         ");
 
@@ -177,7 +157,7 @@ return new class extends Migration
             ALTER TABLE complaints
             ADD CONSTRAINT complaints_rejection_reason_check
             CHECK (
-                status <> 'rejected'
+                status <> 'declined'
                 OR (
                     rejection_reason IS NOT NULL
                     AND LENGTH(TRIM(rejection_reason)) > 0

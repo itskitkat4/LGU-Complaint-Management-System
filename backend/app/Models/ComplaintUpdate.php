@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ComplaintUpdate extends Model
 {
@@ -19,4 +20,14 @@ class ComplaintUpdate extends Model
         'comment',
     ];
     public $timestamps = false;
+
+    public function complaint(): BelongsTo
+    {
+        return $this->belongsTo(Complaint::class, 'complaint_id');
+    }
+
+    public function actor(): BelongsTo
+    {
+        return $this->belongsTo(Profile::class, 'updated_by');
+    }
 }

@@ -1,0 +1,28 @@
+# Environment secrets
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Dependencies
+backend/vendor/
+frontend/node_modules/
+mobile/node_modules/
+
+# Laravel generated files
+backend/bootstrap/cache/*
+!backend/bootstrap/cache/.gitignore
+backend/storage/
+
+# Build outputs
+frontend/dist/
+mobile/dist/
+
+# IDE
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db

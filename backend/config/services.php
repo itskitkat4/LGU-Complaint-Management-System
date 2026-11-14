@@ -23,6 +23,11 @@ return [
             'SUPABASE_STORAGE_BUCKET',
             'complaint-attachments'
         ),
+
+        'reports_storage_bucket' => env(
+            'SUPABASE_REPORTS_STORAGE_BUCKET',
+            'reports'
+        ),
     ],
 
 

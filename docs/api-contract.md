@@ -86,6 +86,10 @@ These endpoints are proposed for implementation. They are not confirmed as exist
 | POST | `/complaints/{id}/attachments` | Authorized user | Upload complaint evidence |
 | GET | `/complaints/{id}/attachments` | Authorized user | List permitted attachments |
 
+The current route configuration also implements `POST /complaints/{complaintId}/review` for LGU-Staff and `POST /staff/complaints/{complaintId}/route` for initial assignment or reassignment. The review request uses `decision: start_review` to move `submitted` to `under_review`; then `decision: accepted` (with `resolution_level`) or `decision: declined` (with `rejection_reason`) moves an in-review complaint to its decision state. Routing is allowed from `accepted`, `assigned`, or `in_progress`.
+
+The implemented citizen `GET /complaints` endpoint returns the authenticated citizen's 10 newest complaints, pagination metadata, and `statistics` aggregated across all of that citizen's complaints. The statistics include `total`, `pending_review` (`submitted`, `under_review`, and `accepted`), `in_progress` (`assigned` plus `in_progress`), and `resolved` (`resolved` only).
+
 ### Complaint Creation
 
 The backend validates the title, description, category, barangay, and priority. The authenticated citizen's identity must come from the verified server-side authentication context, not a client-supplied `citizen_id`.
@@ -123,8 +127,8 @@ Stored status values:
 
 Workflow rules:
 
-1. LGU-Staff reviews submitted complaints.
-2. LGU-Staff accepts or declines the complaint and determines whether it belongs to the barangay or LGU.
+1. LGU-Staff starts review, moving the complaint from `submitted` to `under_review`.
+2. LGU-Staff accepts or declines the complaint from `under_review`; acceptance records whether it belongs to the barangay or LGU, while decline requires a reason.
 3. Barangay-level complaints are handled by the Barangay_Head.
 4. LGU-level complaints are routed to the appropriate department; Department_Head assigns Department_Personnel.
 5. The responsible handler submits a resolution for review.
@@ -158,6 +162,26 @@ Each resubmission should create a new resolution record to preserve the review h
 | GET | `/complaints/{id}/updates` | Authorized user | View status history |
 
 The backend verifies that the acting user can assign, view, or update the relevant complaint. Assignment and status history must not be silently overwritten.
+
+## Barangay Escalation Review — Implemented
+
+| Method | Endpoint | Access | Purpose |
+|---|---|---|---|
+| POST | `/complaints/{complaintId}/escalations` | Assigned Barangay Head or Department Head | Request an escalation with a reason and destination |
+| GET | `/staff/escalations` | Active LGU-Staff | List pending Barangay Head to department escalation requests in the LGU-Staff inbox |
+| POST | `/staff/escalations/{escalationId}/review` | Active LGU-Staff | Accept the requested department or redirect to a selected department |
+
+For Barangay Head requests, the review body requires `decision` (`accepted` or `redirected`) and a `review_comment` of at least 10 characters. `destination_department_id` is required when redirecting. Either decision routes the complaint to the selected department's active Department Head, records the assignment and complaint update, and leaves the complaint `assigned` at LGU level. The receiving Department Head sees it in their department complaint queue. The current implementation uses these queues; it does not send a separate email or push notification.
+
+## Department Head Monitoring and External Escalation — Implemented
+
+| Method | Endpoint | Access | Purpose |
+|---|---|---|---|
+| GET | `/department/monitoring` | Active Department Head | View active assignments across the authenticated head's department, current assignees, status counts, and external escalation history |
+| POST | `/complaints/{complaintId}/escalations` | Active Department Head assigned to the complaint's department | Record an escalation to a named higher-authority office with a reason |
+| POST | `/department/escalations/{escalationId}/outcome` | Active Department Head in the escalation's origin department | Record the external authority's response or decision |
+
+The monitoring endpoint is department-scoped and includes work currently assigned to Department Personnel as well as complaints still assigned to the Department Head. Barangay-to-department escalation requests remain in the LGU-Staff review inbox; Department Heads do not review or redirect those requests.
 
 ## 8. Feedback Endpoints — Planned
 
@@ -199,6 +223,6 @@ Error responses must not expose credentials, access tokens, database passwords, 
 
 ## 10. Implementation Status
 
-The authentication, profile, and barangay routes listed above have been identified in the existing Laravel route configuration. The complaint, resolution, assignment, status-history, and feedback endpoints in this document are planned and must be implemented and verified before the frontend relies on them.
+The authentication, profile, barangay, complaint intake/review/routing, and escalation routes have implementations in the Laravel route configuration. Resolution workflow and feedback endpoints remain planned; verify every route and response against the current implementation before treating this draft as a complete API contract.
 
 Update this document whenever endpoint paths, request fields, response formats, or authorization rules change.

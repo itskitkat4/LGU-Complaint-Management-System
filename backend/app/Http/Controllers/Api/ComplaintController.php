@@ -13,6 +13,7 @@ use Illuminate\Support\Str;
 use App\Models\ComplaintEscalation;
 use App\Models\ComplaintAssignment;
 use Illuminate\Validation\Rule;
+use App\Models\Notification;
 use Throwable;
 
 class ComplaintController extends Controller
@@ -87,19 +88,37 @@ class ComplaintController extends Controller
             ], 403);
         }
 
-        $complaints = Complaint::query()
+        $citizenComplaints = Complaint::query()
+            ->where('citizen_id', $profile->id);
+
+        $statusCounts = (clone $citizenComplaints)
+            ->selectRaw('status, COUNT(*) as aggregate')
+            ->groupBy('status')
+            ->pluck('aggregate', 'status');
+
+        $complaints = (clone $citizenComplaints)
             ->with(
                 'category:id,name',
                 'barangay:id,name',
-                'attachments:id,complaint_id,file_name,mime_type,file_size,resolution_id',
+                'attachments:id,complaint_id,file_name,mime_type,file_size',
             )
-            ->where('citizen_id', $profile->id)
             ->orderByDesc('created_at')
             ->paginate(10);
+
+        $statistics = [
+            'total' => (int) $complaints->total(),
+            'pending_review' => (int) ($statusCounts->get('submitted', 0)
+                + $statusCounts->get('under_review', 0)
+                + $statusCounts->get('accepted', 0)),
+            'in_progress' => (int) ($statusCounts->get('assigned', 0)
+                + $statusCounts->get('in_progress', 0)),
+            'resolved' => (int) $statusCounts->get('resolved', 0),
+        ];
 
         return response()->json([
             'message' => 'Complaint history is retrieve',
             'data' => $complaints->items(),
+            'statistics' => $statistics,
 
             'pagination' => [
                 'current_page' => $complaints->currentPage(),
@@ -107,6 +126,56 @@ class ComplaintController extends Controller
                 'per_page' => $complaints->perPage(),
                 'total' => $complaints->total(),
             ]
+        ]);
+    }
+    //* Display a single complaint belonging to the authenticated citizen.
+    public function show(Request $request, string $complaintId)
+    {
+        $user = $request->attributes->get('supabase_user');
+
+        if (!$user || empty($user['id'])) {
+            return response()->json([
+                'message' => 'Authentication is required.',
+            ], 401);
+        }
+
+        $profile = Profile::find($user['id']);
+
+        if (!$profile || $profile->role !== 'citizen') {
+            return response()->json([
+                'message' => 'Only citizens can access their complaint details.',
+            ], 403);
+        }
+
+        $complaint = Complaint::query()
+            ->where('id', $complaintId)
+            ->where('citizen_id', $profile->id)
+            ->with([
+                'category:id,name',
+                'barangay:id,name',
+                'updates' => function ($query) {
+                    $query->orderBy('created_at', 'asc');
+                },
+                'attachments:id,complaint_id,file_name,mime_type,file_size',
+                'resolutions' => function ($query) {
+                    $query->where('review_status', 'approved')
+                        ->with([
+                            'attachments:id,resolution_id,file_name,mime_type,file_size',
+                        ])
+                        ->orderByDesc('reviewed_at');
+                },
+            ])
+            ->first();
+
+        if (!$complaint) {
+            return response()->json([
+                'message' => 'Complaint not found.',
+            ], 404);
+        }
+
+        return response()->json([
+            'message' => 'Complaint details retrieved successfully.',
+            'complaint' => $complaint,
         ]);
     }
 
@@ -218,6 +287,14 @@ class ComplaintController extends Controller
                     'status' => 'submitted',
                 ]);
 
+                Notification::create([
+                    'profile_id' => $profile->id,
+                    'complaint_id' => $complaint->id,
+                    'title' => 'Complaint Submitted',
+                    'message' => 'Your complaint has been successfully submitted. You can now track its progress.',
+                    'type' => 'complaint_submitted',
+                    'is_read' => false,
+                ]);
                 ComplaintUpdate::create([
                     'complaint_id' => $complaint->id,
                     'updated_by' => $profile->id,
@@ -380,6 +457,17 @@ class ComplaintController extends Controller
                 ], 422);
             }
 
+            $hasPendingExternalEscalation = ComplaintEscalation::where('complaint_id', $complaint->id)
+                ->where('escalation_type', 'department_to_higher_authority')
+                ->where('status', 'pending')
+                ->exists();
+
+            if ($hasPendingExternalEscalation) {
+                return response()->json([
+                    'message' => 'This complaint already has a pending external escalation.',
+                ], 422);
+            }
+
             $escalation = ComplaintEscalation::create([
                 'complaint_id' => $complaint->id,
                 'escalation_type' => 'department_to_higher_authority',
@@ -432,9 +520,9 @@ class ComplaintController extends Controller
 
         $profile = Profile::find($user['id']);
 
-        if (!$profile || $profile->role !== 'Department_Head') {
+        if (!$profile || !$profile->is_active || $profile->role !== 'Department_Head') {
             return response()->json([
-                'message' => 'Only Department Heads can record external escalation outcomes.',
+                'message' => 'Only active Department Heads can record external escalation outcomes.',
             ], 403);
         }
 
@@ -501,6 +589,119 @@ class ComplaintController extends Controller
         return response()->json([
             'message' => 'External escalation outcome recorded successfully.',
             'escalation' => $updatedEscalation,
+        ]);
+    }
+    public function startBarangayWork(Request $request, string $complaintId)
+    {
+        $user = $request->attributes->get('supabase_user');
+
+        if (!$user || empty($user['id'])) {
+            return response()->json([
+                'message' => 'Authenticated user information is missing.',
+            ], 401);
+        }
+
+        $profile = Profile::find($user['id']);
+
+        if (
+            !$profile ||
+            !$profile->is_active ||
+            $profile->role !== 'Barangay_Head'
+        ) {
+            return response()->json([
+                'message' => 'Only active Barangay Heads can start complaint work.',
+            ], 403);
+        }
+
+        if (!$profile->barangay_id) {
+            return response()->json([
+                'message' => 'Your account has no assigned barangay.',
+            ], 422);
+        }
+
+        $complaint = Complaint::find($complaintId);
+
+        if (!$complaint) {
+            return response()->json([
+                'message' => 'Complaint not found.',
+            ], 404);
+        }
+
+        if (
+            $complaint->resolution_level !== 'barangay' ||
+            $complaint->barangay_id !== $profile->barangay_id
+        ) {
+            return response()->json([
+                'message' => 'You can only handle complaints assigned to your barangay.',
+            ], 403);
+        }
+
+        $assignment = ComplaintAssignment::where('complaint_id', $complaint->id)
+            ->where('assigned_to', $profile->id)
+            ->where('assignment_level', 'barangay')
+            ->where('barangay_id', $profile->barangay_id)
+            ->whereNull('ended_at')
+            ->first();
+
+        if (!$assignment) {
+            return response()->json([
+                'message' => 'This complaint is not currently assigned to you.',
+            ], 403);
+        }
+
+        if ($complaint->status !== 'assigned') {
+            return response()->json([
+                'message' => 'Only assigned complaints can be started.',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($complaint, $profile) {
+            $lockedComplaint = Complaint::whereKey($complaint->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($lockedComplaint->status !== 'assigned') {
+                throw new \Illuminate\Http\Exceptions\HttpResponseException(
+                    response()->json([
+                        'message' => 'The complaint has already been started or its status changed.',
+                    ], 422)
+                );
+            }
+
+            $activeAssignment = ComplaintAssignment::where(
+                'complaint_id',
+                $lockedComplaint->id
+            )
+                ->where('assigned_to', $profile->id)
+                ->where('assignment_level', 'barangay')
+                ->where('barangay_id', $profile->barangay_id)
+                ->whereNull('ended_at')
+                ->lockForUpdate()
+                ->first();
+
+            if (!$activeAssignment) {
+                throw new \Illuminate\Http\Exceptions\HttpResponseException(
+                    response()->json([
+                        'message' => 'You are no longer assigned to this complaint.',
+                    ], 403)
+                );
+            }
+
+            $lockedComplaint->status = 'in_progress';
+            $lockedComplaint->save();
+
+            ComplaintUpdate::create([
+                'complaint_id' => $lockedComplaint->id,
+                'updated_by' => $profile->id,
+                'old_status' => 'assigned',
+                'new_status' => 'in_progress',
+                'comment' => 'Barangay Head started working on the complaint.',
+            ]);
+        });
+
+        return response()->json([
+            'message' => 'Complaint work started successfully.',
+            'data' => $complaint->fresh(),
         ]);
     }
 }

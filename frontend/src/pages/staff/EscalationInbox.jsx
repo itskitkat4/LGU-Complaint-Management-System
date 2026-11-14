@@ -18,17 +18,18 @@ export default function EscalationInbox() {
   const [submitting, setSubmitting] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    setError("");
-    Promise.all([getStaffEscalations(page), getDepartments()])
+ useEffect(() => {
+  let active = true;
+
+  Promise.all([getStaffEscalations(page), getDepartments()])
       .then(([result, departmentList]) => {
-        if (!active) return;
-        setEscalations(result.data || []);
-        setPagination(result.pagination || null);
-        setDepartments(departmentList);
-      })
+  if (!active) return;
+
+  setError("");
+  setEscalations(result.data || []);
+  setPagination(result.pagination || null);
+  setDepartments(departmentList);
+  })
       .catch((requestError) => {
         if (active) setError(requestError.message || "Unable to load escalation requests.");
       })
@@ -81,7 +82,7 @@ export default function EscalationInbox() {
         <header>
           <p className="text-sm font-medium text-emerald-700">LGU Staff Portal</p>
           <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Escalation requests</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-600">Review requests from Barangay Heads and route accepted complaints to the appropriate department.</p>
+          <p className="mt-2 text-sm leading-6 text-slate-600">Review requests from Barangay Heads. Accept the requested department or redirect the complaint to another department; the receiving Department Head will see it in their complaint queue.</p>
         </header>
 
         {loading ? <p role="status" className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Loading escalation requests…</p> : error ? (

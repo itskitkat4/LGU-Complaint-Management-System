@@ -131,7 +131,6 @@ export default function MyAssignments() {
                 <option value="all">All statuses</option>
                 <option value="assigned">Assigned</option>
                 <option value="in_progress">In progress</option>
-                <option value="pending_review">Pending review</option>
               </select>
               <span className="text-sm text-slate-500">{visibleAssignments.length} shown</span>
             </section>

@@ -10,7 +10,9 @@ use App\Models\Profile;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use App\Models\ComplaintEscalation;
+use App\Models\Notification;
 
 class StaffComplaintController extends Controller
 {
@@ -35,7 +37,7 @@ class StaffComplaintController extends Controller
 
         $complaints = Complaint::query()
             ->with(['category:id,name', 'barangay:id,name'])
-            ->whereIn('status', ['assigned', 'in_progress', 'resolved', 'closed', 'rejected'])
+            ->whereIn('status', ['assigned', 'in_progress', 'resolved', 'declined'])
             ->orderByDesc('updated_at')
             ->paginate(10);
 
@@ -75,7 +77,7 @@ class StaffComplaintController extends Controller
                 'category:id,name',
                 'barangay:id,name',
             ])
-            ->whereIn('status', ['submitted', 'under_review'])
+            ->whereIn('status', ['submitted', 'under_review', 'accepted'])
             ->orderByDesc('created_at')
             ->paginate(10);
 
@@ -112,10 +114,7 @@ class StaffComplaintController extends Controller
         }
 
         $validated = $request->validate([
-            'decision' => [
-                'required',
-                Rule::in(['accepted', 'rejected']),
-            ],
+            'decision' => ['required', Rule::in(['start_review', 'accepted', 'declined'])],
 
             'resolution_level' => [
                 'required_if:decision,accepted',
@@ -124,7 +123,7 @@ class StaffComplaintController extends Controller
             ],
 
             'rejection_reason' => [
-                'required_if:decision,rejected',
+                'required_if:decision,declined',
                 'nullable',
                 'string',
                 'max:100',
@@ -145,26 +144,34 @@ class StaffComplaintController extends Controller
             ], 404);
         }
 
-        if ($complaint->status !== 'submitted') {
-            return response()->json([
-                'message' => 'Only submitted complaints can be reviewed.',
-            ], 422);
-        }
+        $expectedStatus = $validated['decision'] === 'start_review' ? 'submitted' : 'under_review';
 
-        $newStatus = $validated['decision'] === 'accepted'
+        $newStatus = $validated['decision'] === 'start_review'
             ? 'under_review'
-            : 'rejected';
+            : $validated['decision'];
 
         $resolutionLevel = $validated['decision'] === 'accepted'
             ? $validated['resolution_level']
             : null;
 
-        DB::transaction(function () use ($complaint, $profile, $validated, $newStatus, $resolutionLevel) {
+        DB::transaction(function () use ($complaint, $profile, $validated, $expectedStatus, $newStatus, $resolutionLevel) {
+            $complaint = Complaint::whereKey($complaint->id)->lockForUpdate()->firstOrFail();
+
+            if ($complaint->status !== $expectedStatus) {
+                throw ValidationException::withMessages([
+                    'decision' => [
+                        $expectedStatus === 'submitted'
+                        ? 'Only submitted complaints can enter review.'
+                        : 'Only complaints under review can be accepted or declined.'
+                    ],
+                ]);
+            }
+
             $oldStatus = $complaint->status;
 
             $complaint->status = $newStatus;
             $complaint->resolution_level = $resolutionLevel;
-            $complaint->rejection_reason = $newStatus === 'rejected'
+            $complaint->rejection_reason = $newStatus === 'declined'
                 ? $validated['rejection_reason']
                 : null;
 
@@ -175,11 +182,32 @@ class StaffComplaintController extends Controller
                 'updated_by' => $profile->id,
                 'old_status' => $oldStatus,
                 'new_status' => $newStatus,
-                'comment' => $newStatus === 'rejected'
-                    ? $validated['rejection_reason']
-                    : (
-                        $validated['review_notes'] ?? 'Complaint accepted.'
-                    ) . ' Handling level: ' . $resolutionLevel . '.',
+                'comment' => $newStatus === 'declined'
+                    ? trim($validated['rejection_reason'])
+                    : (trim($validated['review_notes'] ?? '') ?: match ($newStatus) {
+                        'under_review' => 'Review started.',
+                        'accepted' => 'Complaint accepted.',
+                    }) . ($newStatus === 'accepted'
+                        ? ' Handling level: ' . $resolutionLevel . '.'
+                        : ''),
+            ]);
+
+            Notification::create([
+                'profile_id' => $complaint->citizen_id,
+                'complaint_id' =>$complaint->id,
+                'title' => 'Complaint Status Updated',
+                'message' => match ($newStatus) {
+                    'under_review' => 'Your complaint is now under review by LGU Staff.',
+                    'accepted' => 'Your complaint has been accepted for handling at the '
+                        . $resolutionLevel . ' level.',
+                    'declined' => 'Your complaint has been declined. Reason: '
+                        . trim($validated['rejection_reason']),
+                    default => 'Your complaint status has been updated to '
+                        . str_replace('_', ' ', $newStatus) . '.',
+                },
+                'type' => 'complaint_status_updated',
+                'is_read' => false,
+
             ]);
         });
 
@@ -218,7 +246,7 @@ class StaffComplaintController extends Controller
 
         if (
             !in_array($complaint->status, [
-                'under_review',
+                'accepted',
                 'assigned',
                 'in_progress',
             ], true)
@@ -350,6 +378,15 @@ class StaffComplaintController extends Controller
                     . $validated['reason'],
             ]);
 
+            Notification::create([
+                'profile_id' => $assignee->id,
+                'complaint_id' => $complaint->id,
+                'title' => 'Complaint Assigned',
+                'message' => 'A complaint has been assigned to you. Please review it and take the necessary action.',
+                'type' => 'complaint_assigned',
+                'is_read' => false,
+            ]);
+
             return $assignment;
         });
 
@@ -444,7 +481,7 @@ class StaffComplaintController extends Controller
             'data' => $assignees,
         ]);
     }
-        //* Display pending barangay-to-department escalation requests.
+    //* Display pending barangay-to-department escalation requests.
     public function escalationIndex(Request $request)
     {
         $user = $request->attributes->get('supabase_user');
@@ -457,9 +494,9 @@ class StaffComplaintController extends Controller
 
         $profile = Profile::find($user['id']);
 
-        if (!$profile || $profile->role !== 'LGU-Staff') {
+        if (!$profile || !$profile->is_active || $profile->role !== 'LGU-Staff') {
             return response()->json([
-                'message' => 'Only LGU-Staff can view escalation requests.',
+                'message' => 'Only active LGU-Staff can view escalation requests.',
             ], 403);
         }
 
@@ -500,9 +537,9 @@ class StaffComplaintController extends Controller
 
         $profile = Profile::find($user['id']);
 
-        if (!$profile || $profile->role !== 'LGU-Staff') {
+        if (!$profile || !$profile->is_active || $profile->role !== 'LGU-Staff') {
             return response()->json([
-                'message' => 'Only LGU-Staff can review escalation requests.',
+                'message' => 'Only active LGU-Staff can review escalation requests.',
             ], 403);
         }
 
@@ -557,13 +594,7 @@ class StaffComplaintController extends Controller
             ], 422);
         }
 
-        $result = DB::transaction(function () use (
-            $escalation,
-            $profile,
-            $validated,
-            $destinationDepartmentId,
-            $departmentHead
-        ) {
+        $result = DB::transaction(function () use ($escalation, $profile, $validated, $destinationDepartmentId, $departmentHead) {
             $lockedEscalation = ComplaintEscalation::whereKey($escalation->id)
                 ->lockForUpdate()
                 ->first();

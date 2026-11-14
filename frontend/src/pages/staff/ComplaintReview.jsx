@@ -189,7 +189,7 @@ export default function ComplaintReview({ complaintId, onClose }) {
 
   async function loadRoutingOptions(complaintData) {
     if (
-      !["under_review", "assigned", "in_progress"].includes(
+      !["accepted", "assigned", "in_progress"].includes(
         complaintData.status
       ) ||
       !complaintData.resolution_level
@@ -259,7 +259,7 @@ export default function ComplaintReview({ complaintId, onClose }) {
   async function submit(event) {
     event.preventDefault();
 
-    if (decision === "rejected" && !notes.trim()) {
+    if (decision === "declined" && !notes.trim()) {
       setError("Please provide a reason for declining this complaint.");
       return;
     }
@@ -273,14 +273,14 @@ export default function ComplaintReview({ complaintId, onClose }) {
         id,
         decision,
         decision === "accepted" ? resolutionLevel : null,
-        decision === "rejected" ? notes.trim() : "",
+        decision === "declined" ? notes.trim() : "",
         decision === "accepted" ? notes.trim() : ""
       );
 
       if (decision === "accepted") {
         const updatedComplaint = {
           ...complaint,
-          status: "under_review",
+          status: "accepted",
           resolution_level: resolutionLevel,
         };
 
@@ -303,6 +303,20 @@ export default function ComplaintReview({ complaintId, onClose }) {
       }
     } catch (err) {
       setError(err.message || "Failed to submit review.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function startReview() {
+    try {
+      setSubmitting(true);
+      setError("");
+      setSuccess("");
+      await reviewComplaint(id, "start_review");
+      setComplaint((current) => ({ ...current, status: "under_review" }));
+    } catch (err) {
+      setError(err.message || "Failed to start complaint review.");
     } finally {
       setSubmitting(false);
     }
@@ -347,8 +361,8 @@ export default function ComplaintReview({ complaintId, onClose }) {
     }
   }
 
-  const isRejected = decision === "rejected";
-  const noteLimit = isRejected ? 100 : 1000;
+  const isDeclined = decision === "declined";
+  const noteLimit = isDeclined ? 100 : 1000;
 
   // UI only: lock the form while saving and during the short redirect delay.
   const locked = submitting || Boolean(success);
@@ -509,6 +523,15 @@ export default function ComplaintReview({ complaintId, onClose }) {
 
             {/* Decision form */}
             {complaint.status === "submitted" ? (
+              <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h2 className="text-base font-semibold text-slate-900">Begin review</h2>
+                <p className="mt-1 text-sm text-slate-500">Mark that LGU Staff has started reviewing this complaint before recording an acceptance or decline decision.</p>
+                {error && <p role="alert" className="mt-4 text-sm text-red-700">{error}</p>}
+                <button type="button" onClick={startReview} disabled={submitting} className={`${primaryBtn} mt-5 disabled:opacity-60`}>
+                  {submitting ? "Starting…" : "Start review"}
+                </button>
+              </section>
+            ) : complaint.status === "under_review" ? (
               <form
                 onSubmit={submit}
                 className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
@@ -552,13 +575,13 @@ export default function ComplaintReview({ complaintId, onClose }) {
                       />
                       <DecisionButton
                         tone="decline"
-                        active={decision === "rejected"}
+                        active={decision === "declined"}
                         title="Decline Complaint"
                         hint="Not valid — a reason is required"
                         icon={<XIcon />}
                         disabled={locked}
                         onClick={() => {
-                          setDecision("rejected");
+                          setDecision("declined");
                           setError("");
                         }}
                       />
@@ -605,8 +628,8 @@ export default function ComplaintReview({ complaintId, onClose }) {
                         htmlFor="notes"
                         className="text-sm font-medium text-slate-700"
                       >
-                        {isRejected ? "Reason for Declining" : "Review Notes"}
-                        {isRejected ? (
+                        {isDeclined ? "Reason for Declining" : "Review Notes"}
+                        {isDeclined ? (
                           <span className="ml-1 text-red-600">*</span>
                         ) : (
                           <span className="ml-1.5 text-xs font-normal text-slate-400">
@@ -631,11 +654,11 @@ export default function ComplaintReview({ complaintId, onClose }) {
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
                       rows={4}
-                      required={decision === "rejected"}
-                      maxLength={decision === "rejected" ? 100 : 1000}
+                      required={decision === "declined"}
+                      maxLength={decision === "declined" ? 100 : 1000}
                       disabled={locked}
                       placeholder={
-                        decision === "rejected"
+                        decision === "declined"
                           ? "Explain why this complaint is being declined..."
                           : "Add your assessment or observations about this complaint..."
                       }
@@ -643,8 +666,8 @@ export default function ComplaintReview({ complaintId, onClose }) {
                     />
 
                     <p className="mt-1.5 text-xs text-slate-500">
-                      {decision === "rejected"
-                        ? "A rejection reason is required (maximum 100 characters)."
+                      {decision === "declined"
+                        ? "A reason for declining is required (maximum 100 characters)."
                         : "Optional review notes (maximum 1000 characters)."}
                     </p>
                   </div>
@@ -697,7 +720,7 @@ export default function ComplaintReview({ complaintId, onClose }) {
                     type="submit"
                     disabled={locked}
                     className={
-                      isRejected
+                      isDeclined
                         ? `inline-flex items-center justify-center gap-2 rounded-lg bg-red-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60 ${focusRing}`
                         : `${primaryBtn} disabled:cursor-not-allowed disabled:opacity-60`
                     }
@@ -712,7 +735,7 @@ export default function ComplaintReview({ complaintId, onClose }) {
                   </button>
                 </div>
               </form>
-            ) : ["under_review", "assigned", "in_progress"].includes(
+            ) : ["accepted", "assigned", "in_progress"].includes(
                 complaint.status
               ) ? (
               <form

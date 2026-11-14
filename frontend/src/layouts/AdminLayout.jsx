@@ -9,7 +9,6 @@ const navigation = [
   { label: "User Management", icon: "users", path: "/admin/users" },
   { label: "Barangays", icon: "map", path: "/admin/barangays" },
   { label: "Departments", icon: "building", path: "/admin/departments" },
-  { label: "Reports & Analytics", icon: "chart", path: "/admin/reports" },
   { label: "Settings", icon: "settings", path: "/admin/settings" },
 ];
 
@@ -111,9 +110,6 @@ export default function AdminLayout({
               <p className="text-xs font-medium text-slate-500">System Administrator</p>
               <h1 className="text-base font-semibold">{title}</h1>
             </div>
-          </div>
-          <div className="hidden text-sm text-slate-500 sm:block">
-            Welcome, <span className="font-semibold text-slate-800">{firstName}</span>
           </div>
           <ThemeToggle />
           <button onClick={handleSignOut} className={`rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 lg:hidden ${focusRing}`}>Sign Out</button>

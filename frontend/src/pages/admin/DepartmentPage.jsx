@@ -39,11 +39,7 @@ export default function DepartmentPage() {
     try {
       if (isRefresh) {
         setRefreshing(true);
-      } else {
-        setLoading(true);
       }
-
-      setError("");
 
       const data = await getDepartments();
 
@@ -61,8 +57,10 @@ export default function DepartmentPage() {
   }, []);
 
   useEffect(() => {
-    fetchDepartments();
-  }, [fetchDepartments]);
+  queueMicrotask(() => {
+    void fetchDepartments();
+  });
+}, [fetchDepartments]);
 
   // Filter departments based on the search input.
   const filteredDepartments = useMemo(() => {

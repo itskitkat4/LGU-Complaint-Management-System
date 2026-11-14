@@ -1,148 +1,49 @@
+
 import { supabase } from "./supabase";
 
-const API_URL = "http://127.0.0.1:8000/api";
+const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api";
 
-export async function getCitizenProfile() {
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
+/* API Request Helper  Handles authentication, requests, responses, and errors.*/
 
-  if (error) {
-    throw error;
-  }
-
-  if (!session?.access_token) {
-    throw new Error("Please sign in first.");
-  }
-
-  const response = await fetch(`${API_URL}/profile`, {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${session.access_token}`,
-    },
-  });
-
-  const result = await response.json();
-
-  if (!response.ok) {
-    throw new Error(result.message || "Failed to retrieve citizen profile.");
-  }
-
-  return result;
-}
-
-export async function getAuthenticatedProfile() {
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
-  if (error) {
-    throw error;
-  }
-
-  if (!session?.access_token) {
-    throw new Error('Please Sign in First');
-  }
-  const response = await fetch (`${API_URL}/auth/profile`, {
-    method: "GET",
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-      },
-  });
-  const result = await response.json();
-
-  if(!response.ok) {
-    throw new Error(result.message || "Failed to retrieve profile.");
-  }
-  return result;
-}
-
-export async function getAuthenticatedUser() {
-    const {
-        data: { session },
-        error,
-    } = await supabase.auth.getSession();
-    if (error) {
-        throw error;
-    }
-    if (!session?.access_token) {
-        throw new Error("No authenticated user found, Please log in first.");
-    }
-    const response = await fetch(`${API_URL}/auth/me`, {
-      method: "GET",
-        headers: {
-            Accept: "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-        },
-    });
-   const result = await response.json();
-
-   if (!response.ok) {
-       throw new Error(result.message || "Authentication failed.");
-   }
-   return result;   
-}
-
-export async function getBarangays() {
-    const {
-        data: { session },
-        error,
-    } = await supabase.auth.getSession();
-
-    if (error) {
-        throw error;
-    }
-
-    if (!session?.access_token) {
-        throw new Error(" Please log in first.");
-    }
-
-    const response = await fetch(`${API_URL}/barangays`, {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-      },
-    });
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(result.message || "Failed to retrieve barangays.");
-    }
-    
-    // *return the barangays array if it exists, otherwise return an empty array
-    return Array.isArray(result.barangays) ? result.barangays : [];
-}
-
-// Update the citizen profile with the provided barangay ID.
-export async function updateCitizenProfile(barangayId) {
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
+async function fetchWithAccessToken(path, options = {}) {
+  const { data, error } = await supabase.auth.getSession();
 
   if (error) throw error;
 
-  if (!session?.access_token) {
+  const token = data.session?.access_token;
+
+  if (!token) {
     throw new Error("Please sign in first.");
   }
 
-  const response = await fetch(`${API_URL}/profile`, {
-    method: "PUT",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${session.access_token}`,
-    },
-    body: JSON.stringify({
-      barangay_id: barangayId,
-    }),
+  const headers = {
+    Accept: "application/json",
+    Authorization: `Bearer ${token}`,
+    ...options.headers,
+  };
+
+  const isFormData = options.body instanceof FormData;
+
+  if (options.body && !isFormData && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
+
+  const response = await fetch(`${API_URL}${path}`, {
+    ...options,
+    headers,
   });
 
-  const result = await response.json();
+  const responseText = await response.text();
+
+  let result = {};
+
+  if (responseText) {
+    try {
+      result = JSON.parse(responseText);
+    } catch {
+      result = { message: responseText };
+    }
+  }
 
   if (!response.ok) {
     const validationMessage = result.errors
@@ -152,309 +53,108 @@ export async function updateCitizenProfile(barangayId) {
     throw new Error(
       validationMessage ||
         result.message ||
-        "Failed to complete your profile."
+        "Something went wrong with the request."
     );
   }
 
   return result;
 }
 
-// * get all departments
+/* Authentication and Profile*/
+
+export function getCitizenProfile() {
+  return fetchWithAccessToken("/profile");
+}
+
+export function getAuthenticatedProfile() {
+  return fetchWithAccessToken("/auth/profile");
+}
+
+export function getAuthenticatedUser() {
+  return fetchWithAccessToken("/auth/me");
+}
+
+export function updateCitizenProfile(barangayId) {
+  return fetchWithAccessToken("/profile", {
+    method: "PUT",
+    body: JSON.stringify({
+      barangay_id: barangayId,
+    }),
+  });
+}
+
+/* Barangays*/
+
+export async function getBarangays() {
+  const result = await fetchWithAccessToken("/barangays");
+
+  return result.barangays || [];
+}
+
+export function getBarangayHeadComplaints(page = 1) {
+  return fetchWithAccessToken(`/barangay/complaints?page=${page}`);
+}
+
+/* Departments*/
 
 export async function getDepartments() {
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
+  const result = await fetchWithAccessToken("/departments");
 
-  if (error) throw error;
-
-  if (!session?.access_token) {
-    throw new Error("Please sign in first.");
-  }
-
-  const response = await fetch(`${API_URL}/departments`, {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${session.access_token}`,
-    },
-  });
-
-  const result = await response.json();
-
-  if (!response.ok) {
-    throw new Error(result.message || "Failed to retrieve departments.");
-  }
-  return Array.isArray(result.departments) ? result.departments : [];
+  return result.departments || [];
 }
 
-//* Create department
-export async function createDepartment(departmentData) {
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
-
-  if (error) throw error;
-
-  if (!session?.access_token) {
-    throw new Error("Please sign in first.");
-  }
-
-  const response = await fetch(`${API_URL}/departments`, {
+export function createDepartment(departmentData) {
+  return fetchWithAccessToken("/departments", {
     method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${session.access_token}`,
-    },
     body: JSON.stringify(departmentData),
   });
-
-  const result = await response.json();
-
-  if (!response.ok) {
-    throw new Error(result.message || "Failed to create department.");
-  }
-
-  return result;
 }
 
-//* Update department
-export async function updateDepartment(departmentId, departmentData) {
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
-
-  if (error) throw error;
-
-  if (!session?.access_token) {
-    throw new Error("Please sign in first.");
-  }
-
-  const response = await fetch(`${API_URL}/departments/${departmentId}`, {
+export function updateDepartment(departmentId, departmentData) {
+  return fetchWithAccessToken(`/departments/${departmentId}`, {
     method: "PUT",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${session.access_token}`,
-    },
     body: JSON.stringify(departmentData),
   });
-
-  const result = await response.json();
-
-  if (!response.ok) {
-    throw new Error(result.message || "Failed to update department.");
-  }
-
-  return result;
 }
 
-//* Delete department
-export async function deleteDepartment(departmentId) {
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
-
-  if (error) throw error;
-
-  if (!session?.access_token) {
-    throw new Error("Please sign in first.");
-  }
-
-  const response = await fetch(`${API_URL}/departments/${departmentId}`, {
+export function deleteDepartment(departmentId) {
+  return fetchWithAccessToken(`/departments/${departmentId}`, {
     method: "DELETE",
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${session.access_token}`,
-    },
   });
-
-  const result = await response.json();
-
-  if (!response.ok) {
-    throw new Error(result.message || "Failed to delete department.");
-  }
-
-  return result;
 }
 
+/* Staff Accounts*/
 
 export async function getStaffAccounts() {
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
+  const result = await fetchWithAccessToken("/staff-accounts");
 
-  if (error) throw error;
-
-  if (!session?.access_token) {
-    throw new Error("Please sign in first.");
-  }
-
-  const response = await fetch(`${API_URL}/staff-accounts`, {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${session.access_token}`,
-    },
-  });
-
-  const result = await response.json();
-
-  if (!response.ok) {
-    throw new Error(result.message || "Failed to retrieve staff accounts.");
-  }
-
-  return Array.isArray(result.staff) ? result.staff : [];
+  return result.staff || [];
 }
 
-
-export async function getStaffComplaint(complaintId) {
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
-
-  if (error) throw error;
-
-  if (!session?.access_token) {
-    throw new Error("Please sign in first.");
-  }
-
-  const response = await fetch(
-    `${API_URL}/staff/complaints/${complaintId}`,
-    {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-      },
-    }
-  );
-
-  const result = await response.json();
-
-  if (!response.ok) {
-    throw new Error(
-      result.message || "Failed to retrieve complaint details."
-    );
-  }
-
-  return result;
-}
-
-
-export async function createStaffAccount(staffData) {
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
-
-  if (error) throw error;
-
-  if (!session?.access_token) {
-    throw new Error("Please sign in first.");
-  }
-
-  const response = await fetch(`${API_URL}/staff-accounts`, {
+export function createStaffAccount(staffData) {
+  return fetchWithAccessToken("/staff-accounts", {
     method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${session.access_token}`,
-    },
     body: JSON.stringify(staffData),
   });
-
-  const result = await response.json();
-
-  if (!response.ok) {
-    throw new Error(result.message || "Failed to create  account.");
-  }
-
-  return result;
 }
 
-export async function deactivateStaffAccount(staffId) {
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession(); 
-  
-  if (error) throw error;
-
-  if (!session?.access_token) {
-    throw new Error("Please sign in first.");
-  }
-
-  const response = await fetch(`${API_URL}/staff-accounts/${staffId}/deactivate`, {
+export function deactivateStaffAccount(staffId) {
+  return fetchWithAccessToken(`/staff-accounts/${staffId}/deactivate`, {
     method: "PATCH",
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${session.access_token}`,
-    },
   });
-
-  const result = await response.json();
-
-  if (!response.ok) {
-    throw new Error(result.message || "Failed to deactivate staff account.");
-  }
-
-  return result;
 }
 
-//* Get active complaint categories
+/* Complaint Categories*/
+
 export async function getComplaintCategories() {
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
+  const result = await fetchWithAccessToken("/complaint-categories");
 
-  if (error) throw error;
-
-  if (!session?.access_token) {
-    throw new Error("Please sign in first.");
-  }
-
-  const response = await fetch(`${API_URL}/complaint-categories`, {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${session.access_token}`,
-    },
-  });
-
-  const result = await response.json();
-
-  if (!response.ok) {
-    throw new Error(
-      result.message || "Failed to retrieve complaint categories."
-    );
-  }
-
-  return Array.isArray(result.categories) ? result.categories : [];
+  return result.categories || [];
 }
 
+/* Citizen Complaints*/
 
-//* Create complaint with optional evidence attachments
-export async function createComplaint(complaintData) {
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
-
-  if (error) throw error;
-
-  if (!session?.access_token) {
-    throw new Error("Please sign in first.");
-  }
-
+export function createComplaint(complaintData) {
   const formData = new FormData();
 
   formData.append("barangay_id", complaintData.barangay_id);
@@ -468,450 +168,362 @@ export async function createComplaint(complaintData) {
     });
   }
 
-  const response = await fetch(`${API_URL}/complaints`, {
+  return fetchWithAccessToken("/complaints", {
     method: "POST",
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${session.access_token}`,
-    },
     body: formData,
   });
-
-  const result = await response.json();
-
-  if (!response.ok) {
-    const validationMessage = result.errors
-      ? Object.values(result.errors).flat().join(" ")
-      : "";
-
-    throw new Error(
-      validationMessage ||
-        result.message ||
-        "Failed to submit complaint."
-    );
-  }
-
-  return result;
 }
 
-export async function getStaffComplaints(page = 1) {
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
-
-  if (error) throw error;
-
-  if (!session?.access_token) {
-    throw new Error("Please sign in first.");
-  }
-
-  const response = await fetch(
-    `${API_URL}/staff/complaints?page=${page}`,
-    {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-      },
-    }
-  );
-
-  const result = await response.json();
-
-  if (!response.ok) {
-    throw new Error(
-      result.message || "Failed to retrieve staff complaints."
-    );
-  }
-
-  return result;
+export function getCitizenComplaints(page = 1) {
+  return fetchWithAccessToken(`/complaints?page=${page}`);
 }
 
-export async function getStaffComplaintHistory(page = 1) {
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
-
-  if (error) throw error;
-  if (!session?.access_token) throw new Error("Please sign in first.");
-
-  const response = await fetch(
-    `${API_URL}/staff/complaints/history?page=${page}`,
-    {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-      },
-    }
-  );
-
-  const result = await response.json();
-  if (!response.ok) {
-    throw new Error(result.message || "Failed to retrieve complaint history.");
-  }
-
-  return result;
+export function getCitizenComplaint(complaintId) {
+  return fetchWithAccessToken(`/complaints/${complaintId}`);
 }
 
+/* LGU-Staff Complaint Management*/
 
-export async function reviewComplaint(
+export function getStaffComplaints(page = 1) {
+  return fetchWithAccessToken(`/staff/complaints?page=${page}`);
+}
+
+export function getStaffComplaintHistory(page = 1) {
+  return fetchWithAccessToken(`/staff/complaints/history?page=${page}`);
+}
+
+export function getStaffComplaint(complaintId) {
+  return fetchWithAccessToken(`/staff/complaints/${complaintId}`);
+}
+
+export function reviewComplaint(
   complaintId,
   decision,
   resolutionLevel = null,
   rejectionReason = "",
-  reviewNotes = ""  
+  reviewNotes = ""
 ) {
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
-
-  if (error) throw error;
-
-  if (!session?.access_token) {
-    throw new Error("Please sign in first.");
-  }
-
-  const response = await fetch(
-    `${API_URL}/complaints/${complaintId}/review`,
-    {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({
-        decision,
-        resolution_level: resolutionLevel,
-        rejection_reason: rejectionReason,
-        review_notes: reviewNotes,
-      }),
-    }
-  );
-
-  const result = await response.json();
-
-  if (!response.ok) {
-    throw new Error(
-      result.message || "Failed to submit complaint review."
-    );
-  }
-
-  return result;
-}
-
-export async function getAdminDashboardSummary() {
-  const {
-    data: {session},
-    error,
-    } = await supabase.auth.getSession();
-  
-
-    if(error)
-       throw error;
-    if(!session?.access_token) throw new Error("Please sign in first");
-    
-    const response = await fetch (`${API_URL}/admin/dashboard-summary`, {
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${session.access_token}`,
-    },
+  return fetchWithAccessToken(`/complaints/${complaintId}/review`, {
+    method: "POST",
+    body: JSON.stringify({
+      decision,
+      resolution_level: resolutionLevel,
+      rejection_reason: rejectionReason,
+      review_notes: reviewNotes,
+    }),
   });
-  const result = await response.json();
-
-  if(!response.ok) {
-    throw new Error(result.message || "Failed to load dashboard.");
-  }
-  return result;
 }
 
-
-export async function routeComplaint(
+export function routeComplaint(
   complaintId,
   assignedTo,
   reason,
   departmentId = null
 ) {
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
-
-  if (error) throw error;
-
-  if (!session?.access_token) {
-    throw new Error("Please sign in first.");
-  }
-
-  const response = await fetch(
-    `${API_URL}/staff/complaints/${complaintId}/route`,
-    {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({
-        assigned_to: assignedTo,
-        reason,
-        department_id: departmentId,
-      }),
-    }
-  );
-
-  const result = await response.json();
-
-  if (!response.ok) {
-    throw new Error(
-      result.message || "Failed to route complaint."
-    );
-  }
-
-  return result;
-}
-export async function getEligibleAssignees(complaintId) {
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
-
-  if (error) throw error;
-
-  if (!session?.access_token) {
-    throw new Error("Please sign in first.");
-  }
-
-  const response = await fetch(
-    `${API_URL}/staff/complaints/${complaintId}/eligible-assignees`,
-    {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-      },
-    }
-  );
-
-  const result = await response.json();
-
-  if (!response.ok) {
-    throw new Error(result.message || "Failed to load eligible recipients.");
-  }
-
-  return result.data;
-}
-export async function getDepartmentPersonnelComplaints(page = 1) {
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
-
-  if (error) throw error;
-
-  if (!session?.access_token) {
-    throw new Error("Please sign in first.");
-  }
-
-  const response = await fetch(
-    `${API_URL}/department/personnel/complaints?page=${page}`,
-    {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-      },
-    }
-  );
-
-  const result = await response.json();
-
-  if (!response.ok) {
-    throw new Error(
-      result.message || "Failed to retrieve assigned complaints."
-    );
-  }
-
-  return result;
-}
-
-
-// Get complaints routed to the authenticated Department Head's department
-export async function getDepartmentHeadComplaints(page = 1) {
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
-
-  if (error) throw error;
-
-  if (!session?.access_token) {
-    throw new Error("Please sign in first.");
-  }
-
-  const response = await fetch(
-    `${API_URL}/department/complaints?page=${page}`,
-    {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-      },
-    }
-  );
-
-  const result = await response.json();
-
-  if (!response.ok) {
-    throw new Error(
-      result.message || "Failed to retrieve department complaints."
-    );
-  }
-
-  return result;
-}
-
-// Get active personnel belonging to the Department Head's department
-export async function getDepartmentPersonnel() {
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
-
-  if (error) throw error;
-
-  if (!session?.access_token) {
-    throw new Error("Please sign in first.");
-  }
-
-  const response = await fetch(`${API_URL}/department/personnel`, {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${session.access_token}`,
-    },
-  });
-
-  const result = await response.json();
-
-  if (!response.ok) {
-    throw new Error(
-      result.message || "Failed to retrieve department personnel."
-    );
-  }
-
-  return Array.isArray(result.data) ? result.data : [];
-}
-
-// Assign a complaint to Department Personnel
-export async function assignComplaintToPersonnel(
-  complaintId,
-  assignedTo,
-  reason
-) {
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
-
-  if (error) throw error;
-
-  if (!session?.access_token) {
-    throw new Error("Please sign in first.");
-  }
-
-  const response = await fetch(
-    `${API_URL}/department/complaints/${complaintId}/assign`,
-    {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({
-        assigned_to: assignedTo,
-        reason,
-      }),
-    }
-  );
-
-  const result = await response.json();
-
-  if (!response.ok) {
-    const validationMessage = result.errors
-      ? Object.values(result.errors).flat().join(" ")
-      : "";
-
-    throw new Error(
-      validationMessage ||
-        result.message ||
-        "Failed to assign complaint."
-    );
-  }
-
-  return result;
-}
-
-async function fetchWithAccessToken(path, options = {}) {
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
-
-  if (error) throw error;
-  if (!session?.access_token) throw new Error("Please sign in first.");
-
-  const response = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: {
-      Accept: "application/json",
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-      Authorization: `Bearer ${session.access_token}`,
-      ...options.headers,
-    },
-  });
-
-  const result = await response.json();
-  if (!response.ok) {
-    const validationMessage = result.errors
-      ? Object.values(result.errors).flat().join(" ")
-      : "";
-    throw new Error(validationMessage || result.message || "Request failed.");
-  }
-
-  return result;
-}
-
-export async function getBarangayHeadComplaints(page = 1) {
-  return fetchWithAccessToken(`/barangay/complaints?page=${page}`);
-}
-
-export async function requestComplaintEscalation(
-  complaintId,
-  destinationDepartmentId,
-  reason
-) {
-  return fetchWithAccessToken(`/complaints/${complaintId}/escalations`, {
+  return fetchWithAccessToken(`/staff/complaints/${complaintId}/route`, {
     method: "POST",
     body: JSON.stringify({
-      destination_department_id: destinationDepartmentId,
+      assigned_to: assignedTo,
       reason,
+      department_id: departmentId,
     }),
   });
 }
 
-export async function getStaffEscalations(page = 1) {
+export async function getEligibleAssignees(complaintId) {
+  const result = await fetchWithAccessToken(
+    `/staff/complaints/${complaintId}/eligible-assignees`
+  );
+
+  return result.data;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Department Head
+|--------------------------------------------------------------------------
+*/
+
+export function getDepartmentHeadComplaints(page = 1) {
+  return fetchWithAccessToken(`/department/complaints?page=${page}`);
+}
+
+export function getDepartmentMonitoring(page = 1) {
+  return fetchWithAccessToken(`/department/monitoring?page=${page}`);
+}
+
+export async function getDepartmentPersonnel() {
+  const result = await fetchWithAccessToken("/department/personnel");
+
+  return result.data || [];
+}
+
+export function assignComplaintToPersonnel(
+  complaintId,
+  assignedTo,
+  reason
+) {
+  return fetchWithAccessToken(
+    `/department/complaints/${complaintId}/assign`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        assigned_to: assignedTo,
+        reason,
+      }),
+    }
+  );
+}
+
+/*Department Personnel*/
+
+export function getDepartmentPersonnelComplaints(page = 1) {
+  return fetchWithAccessToken(
+    `/department/personnel/complaints?page=${page}`
+  );
+}
+export function submitComplaintResolution(
+  complaintId,
+  description,
+  evidence = []
+) {
+  const formData = new FormData();
+
+  formData.append("resolution_description", description);
+
+  evidence.forEach((file) => {
+    formData.append("evidence[]", file);
+  });
+
+  return fetchWithAccessToken(
+    `/complaints/${complaintId}/resolutions`,
+    {
+      method: "POST",
+      body: formData,
+    }
+  );
+}
+
+export function startDepartmentPersonnelWork(complaintId) {
+  return fetchWithAccessToken(
+    `/department/personnel/complaints/${complaintId}/start`,
+    {
+      method: "POST",
+    }
+  );
+}
+export function startBarangayHeadWork(complaintId) {
+  return fetchWithAccessToken(
+    `/barangay/complaints/${complaintId}/start`,
+    {
+      method: "POST",
+    }
+  );
+}
+/*
+|--------------------------------------------------------------------------
+| LGU-Staff Resolution Review
+|--------------------------------------------------------------------------
+*/
+
+export function getStaffResolutions(page = 1) {
+  return fetchWithAccessToken(`/staff/resolutions?page=${page}`);
+}
+
+export function reviewResolution(
+  resolutionId,
+  decision,
+  reviewComment = ""
+) {
+  return fetchWithAccessToken(
+    `/staff/resolutions/${resolutionId}/review`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        decision,
+        review_comment: reviewComment,
+      }),
+    }
+  );
+}
+
+
+
+/* Complaint Attachments*/
+
+export function getComplaintAttachmentSignedUrl(attachmentId) {
+  return fetchWithAccessToken(
+    `/complaint-attachments/${attachmentId}/signed-url`
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Escalations
+|--------------------------------------------------------------------------
+*/
+
+export function requestComplaintEscalation(
+  complaintId,
+  destinationDepartmentId,
+  reason,
+  higherAuthorityOffice = null
+) {
+  const body = { reason };
+
+  if (destinationDepartmentId) {
+    body.destination_department_id = destinationDepartmentId;
+  }
+
+  if (higherAuthorityOffice) {
+    body.higher_authority_office = higherAuthorityOffice;
+  }
+
+  return fetchWithAccessToken(`/complaints/${complaintId}/escalations`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function getStaffEscalations(page = 1) {
   return fetchWithAccessToken(`/staff/escalations?page=${page}`);
 }
 
-export async function reviewStaffEscalation(escalationId, review) {
-  return fetchWithAccessToken(`/staff/escalations/${escalationId}/review`, {
-    method: "POST",
-    body: JSON.stringify(review),
+export function reviewStaffEscalation(escalationId, review) {
+  return fetchWithAccessToken(
+    `/staff/escalations/${escalationId}/review`,
+    {
+      method: "POST",
+      body: JSON.stringify(review),
+    }
+  );
+}
+
+export function recordDepartmentEscalationOutcome(
+  escalationId,
+  outcomeNotes
+) {
+  return fetchWithAccessToken(
+    `/department/escalations/${escalationId}/outcome`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        outcome_notes: outcomeNotes,
+      }),
+    }
+  );
+}
+
+
+//*Admin Dashboard
+export function getAdminDashboardSummary() {
+  return fetchWithAccessToken("/admin/dashboard-summary");
+}
+
+export function getDepartmentPersonnelComplaint(complaintId) {
+  return fetchWithAccessToken(
+    `/department/personnel/complaints/${complaintId}`
+  );
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Citizen Feedback
+|--------------------------------------------------------------------------
+*/
+
+export async function getEligibleFeedbackComplaints() {
+  const result = await fetchWithAccessToken(
+    "/feedback/eligible-complaints"
+  );
+
+  return result.data || [];
+}
+
+export function submitCitizenFeedback(
+  complaintId,
+  rating,
+  comment
+) {
+  return fetchWithAccessToken(
+    `/complaints/${complaintId}/feedback`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        rating,
+        comment,
+      }),
+    }
+  );
+}
+
+// Notification
+
+/*
+|--------------------------------------------------------------------------
+| Citizen Notifications
+|--------------------------------------------------------------------------
+*/
+
+export async function getCitizenNotifications() {
+  const result = await fetchWithAccessToken("/notifications");
+
+  // Supports common Laravel response structures
+  return result.notifications || result.data || [];
+}
+
+export async function getUnreadNotificationCount() {
+  const result = await fetchWithAccessToken(
+    "/notifications/unread-count"
+  );
+
+  return result.unread_count ?? result.count ?? 0;
+}
+
+export function markNotificationAsRead(notificationId) {
+  return fetchWithAccessToken(
+    `/notifications/${notificationId}/read`,
+    {
+      method: "PATCH",
+    }
+  );
+}
+
+export function markAllNotificationsAsRead() {
+  return fetchWithAccessToken("/notifications/read-all", {
+    method: "PATCH",
   });
+}
+
+export function getStaffReports() {
+  return fetchWithAccessToken("/staff/reports/summary");
+}
+
+
+export function createStaffReport(dateFrom, dateTo) {
+  return fetchWithAccessToken("/staff/reports", {
+    method: "POST",
+    body: JSON.stringify({
+      date_from: dateFrom,
+      date_to: dateTo,
+    }),
+  });
+}
+
+export function uploadStaffReportPdf(reportId, pdfBlob, filename) {
+  const formData = new FormData();
+
+  formData.append("file", pdfBlob, filename);
+
+  return fetchWithAccessToken(`/staff/reports/${reportId}/pdf`, {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export function getStaffReportPdfSignedUrl(reportId) {
+  return fetchWithAccessToken(
+    `/staff/reports/${reportId}/pdf/signed-url`
+  );
 }

@@ -42,11 +42,11 @@ return new class extends Migration
             CHECK (new_status IN (
                 'submitted',
                 'under_review',
+                'accepted',
+                'declined',
                 'assigned',
                 'in_progress',
-                'resolved',
-                'closed',
-                'rejected'
+                'resolved'
             ))
         ");
 
@@ -58,11 +58,11 @@ return new class extends Migration
                 OR old_status IN (
                     'submitted',
                     'under_review',
+                    'accepted',
+                    'declined',
                     'assigned',
                     'in_progress',
-                    'resolved',
-                    'closed',
-                    'rejected'
+                    'resolved'
                 )
             )
         ");

@@ -56,11 +56,11 @@ return new class extends Migration
             CHECK (status IN (
                 'submitted',
                 'under_review',
+                'accepted',
+                'declined',
                 'assigned',
                 'in_progress',
-                'resolved',
-                'closed',
-                'rejected'
+                'resolved'
             ))
         ");
 
@@ -83,7 +83,7 @@ return new class extends Migration
             ALTER TABLE complaints
             ADD CONSTRAINT complaints_rejection_reason_check
             CHECK (
-                status <> 'rejected'
+                status <> 'declined'
                 OR (
                     rejection_reason IS NOT NULL
                     AND LENGTH(TRIM(rejection_reason)) > 0

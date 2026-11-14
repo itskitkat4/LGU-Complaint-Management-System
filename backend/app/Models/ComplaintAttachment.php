@@ -19,7 +19,6 @@ class ComplaintAttachment extends Model
         'file_name',
         'mime_type',
         'file_size',
-        'resolution_id',
     ];
 
     public function complaint(): BelongsTo {
@@ -29,5 +28,6 @@ class ComplaintAttachment extends Model
     public function uploader(): BelongsTo{
         return $this->belongsTo(Profile::class, 'uploaded_by');
     }
+
     public $timestamps = false;
 }

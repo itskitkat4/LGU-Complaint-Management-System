@@ -84,6 +84,21 @@ class ComplaintRoutingTest extends TestCase
             $table->text('comment')->nullable();
         });
 
+        Schema::create('notifications', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->uuid('profile_id');
+            $table->uuid('complaint_id')->nullable();
+            $table->string('title');
+            $table->text('message');
+            $table->string('type', 50);
+            $table->boolean('is_read')->default(false);
+            $table->timestampTz('read_at')->nullable();
+            $table->timestamps();
+
+            $table->index(['profile_id', 'is_read']);
+            $table->index(['profile_id', 'created_at']);
+        });
+
         Profile::create([
             'id' => $this->staffId,
             'full_name' => 'Test LGU Staff',
@@ -143,7 +158,6 @@ class ComplaintRoutingTest extends TestCase
             ],
         ]);
     }
-
     private function authenticateAs(string $profileId, string $email): void
     {
         Http::fake([
@@ -162,7 +176,7 @@ class ComplaintRoutingTest extends TestCase
             'title' => 'Test complaint',
             'description' => 'This complaint is created for routing tests.',
             'priority' => 'medium',
-            'status' => 'under_review',
+            'status' => 'accepted',
             'resolution_level' => $level,
             'barangay_id' => $this->barangayId,
         ]);

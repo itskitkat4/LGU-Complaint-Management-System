@@ -21,11 +21,11 @@ erDiagram
     COMPLAINTS ||--o{ COMPLAINT_UPDATES : "status history"
     PROFILES ||--o{ COMPLAINT_UPDATES : "records"
     COMPLAINTS ||--o| FEEDBACK : "may receive"
-    PROFILES ||--o{ FEEDBACK : "submits"
     COMPLAINTS ||--o{ COMPLAINT_RESOLUTIONS : "resolution history"
     PROFILES ||--o{ COMPLAINT_RESOLUTIONS : "submits"
     PROFILES o|--o{ COMPLAINT_RESOLUTIONS : "reviews"
-    COMPLAINT_RESOLUTIONS o|--o{ COMPLAINT_ATTACHMENTS : "evidence for"
+    COMPLAINT_RESOLUTIONS ||--o{ COMPLAINT_RESOLUTION_ATTACHMENTS : "evidence"
+    PROFILES ||--o{ COMPLAINT_RESOLUTION_ATTACHMENTS : "uploads"
     COMPLAINTS ||--o{ COMPLAINT_ESCALATIONS : "escalation history"
     PROFILES ||--o{ COMPLAINT_ESCALATIONS : "requests"
     BARANGAYS o|--o{ COMPLAINT_ESCALATIONS : "origin"
@@ -79,7 +79,6 @@ erDiagram
         uuid id PK
         uuid complaint_id FK
         uuid uploaded_by FK
-        uuid resolution_id FK "nullable"
         string file_path
         string file_name
         string mime_type
@@ -111,8 +110,7 @@ erDiagram
     FEEDBACK {
         uuid id PK
         uuid complaint_id FK UK
-        uuid citizen_id FK
-        tinyint rating
+        smallint rating
         text comment "nullable"
     }
 
@@ -126,6 +124,16 @@ erDiagram
         text review_comment "nullable"
         timestamp submitted_at
         timestamp reviewed_at "nullable"
+    }
+
+    COMPLAINT_RESOLUTION_ATTACHMENTS {
+        uuid id PK
+        uuid resolution_id FK
+        uuid uploaded_by FK
+        string file_path
+        string file_name
+        string mime_type
+        bigint file_size
     }
 
     COMPLAINT_ESCALATIONS {
@@ -153,32 +161,22 @@ erDiagram
 - Every entity has a UUID primary key except `profiles.id`, which is the UUID supplied by Supabase Auth.
 - A profile may optionally belong to one barangay and/or one department. Current migrations do not enforce which roles may use those foreign keys.
 - Every complaint references one citizen profile, one category, and one barangay.
-- A complaint can have multiple assignments, status updates, attachments, resolutions, and escalations; these rows preserve history.
+- A complaint can have multiple assignments, status updates, original attachments, resolutions, and escalations; these rows preserve history. Resolution evidence belongs to a resolution-specific attachment table.
 - An assignment references one recipient and one assigning profile. Its handling-unit check requires a barangay for `barangay` assignments or a department for `lgu` assignments.
-- Each feedback row references one complaint and one citizen. `feedback.complaint_id` is unique, so a complaint has at most one feedback row.
-- Each attachment belongs to a complaint. It may optionally reference a resolution. If a resolution is deleted, the current foreign key sets `resolution_id` to null.
+- A new partial unique index permits at most one assignment with `ended_at IS NULL` per complaint. The migration stops if existing active duplicates need manual reconciliation.
+- Each feedback row references one complaint. `feedback.complaint_id` is unique, so a complaint has at most one feedback row; its citizen owner is reached through the complaint.
+- Original evidence references its complaint; resolution evidence references its resolution. A file row cannot carry both IDs and accidentally connect unrelated complaints.
 - Escalation origin/destination fields are nullable because their valid combination depends on `escalation_type`; the database check enforces those combinations.
 - Supabase Auth is an external identity service, not a table in this ERD. The Laravel `users` table is also not connected to `profiles` in the current migrations; include it only if the application intends to use Laravel-managed accounts.
 
-## Normalization review prompts
+## Normalization outcome
 
-Use these questions when checking the ERD against the course or project normalization requirements:
+The design is in 3NF for the current application requirements. Atomic evidence, assignment, status, resolution, escalation, and feedback records are separate rows. Reference names live in `complaint_categories`, `barangays`, and `departments`, with their IDs stored in complaint records. Stable controlled values remain checked strings; normalization does not require a lookup table for each small fixed list. See `docs/database-design.md` for the finalized logical design and implementation gaps.
 
-1. **First normal form:** Are all fields atomic? File attachments, status history, assignments, resolutions, and escalations should remain separate rows rather than repeated columns on `complaints`.
-2. **Second normal form:** Are non-key attributes dependent on the whole primary key? These tables use UUID surrogate keys; verify there are no duplicated composite facts hiding in text fields.
-3. **Third normal form:** Are descriptive facts stored with the entity they describe? Category names belong in `complaint_categories`, barangay names in `barangays`, and department names in `departments`; the complaint stores their foreign keys.
-4. **Historical correctness:** Assignment rows store the handling unit as well as the assignee. Keep that snapshot if it is needed to preserve the unit at the time of assignment, even if it can often be inferred from the profile today.
-5. **Controlled values:** Decide whether `role`, complaint `status`, `priority`, `resolution_level`, review statuses, and escalation statuses should remain checked strings or become lookup tables. Normalization alone does not require a lookup table for every small fixed list.
-6. **Cross-row consistency:** Confirm the API ensures `feedback.citizen_id` is the complaint's citizen, since the current foreign keys only ensure that both referenced records exist.
+The chosen complaint lifecycle follows `docs/workflow-rule.md`: `submitted`, `under_review`, `accepted`, `declined`, `assigned`, `in_progress`, `pending_review`, and `resolved`. The latest source migration canonicalizes legacy values; inspect the live records and migration state before applying it.
 
-## Decisions to confirm before finalizing
-
-- Choose canonical complaint status names. Current controller behavior and workflow documentation have used different vocabularies; the latest constraints temporarily allow both.
-- Confirm whether status `accepted` is a real complaint state or whether acceptance is recorded as a decision while the complaint becomes `under_review`.
-- Confirm that one feedback record per complaint is the requirement.
-- Confirm whether every resolution attachment must have a matching `complaint_id` and `resolution_id` pair. Current foreign keys do not ensure both point to the same complaint.
-- Confirm whether inactive categories, departments, or barangays should be retained for historical records rather than deleted.
+Keep one feedback row per complaint. The feedback owner is derived from its complaint; the API must verify that the authenticated citizen owns that complaint. The latest source migration removes the duplicated `feedback.citizen_id` after checking that existing values match complaint owners. Resolution attachments reference the resolution directly, avoiding a duplicated complaint ID. Retain inactive reference records so historical complaints remain readable.
 
 ## Source files
 
-This guide is based on the Laravel migrations in `backend/database/migrations`. For column nullability, uniqueness, delete behavior, and check constraints, the migrations are authoritative. The workflow rules and API documentation describe intended behavior and may include features not fully implemented in the current API.
+This ERD reflects Laravel migrations in `backend/database/migrations`; `docs/database-design.md` records the finalized intended design. For the currently deployed schema, inspect Supabase directly and compare its migration history. Source migrations alone do not establish what has been applied remotely.

@@ -27,8 +27,6 @@ export default function ComplaintHistory() {
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
-    setError("");
     getStaffComplaintHistory(page)
       .then((result) => {
         if (!active) return;
@@ -75,7 +73,7 @@ export default function ComplaintHistory() {
         <header>
           <p className="text-sm font-medium text-emerald-700">LGU Staff Portal</p>
           <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Complaint History</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Review complaints that have moved beyond initial review, including routed, resolved, closed, and rejected cases.</p>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Review complaints that have moved beyond initial review, including routed, resolved, and declined cases.</p>
         </header>
 
         <section className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center">

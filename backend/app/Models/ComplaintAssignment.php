@@ -45,4 +45,14 @@ class ComplaintAssignment extends Model
     {
         return $this->belongsTo(Profile::class, 'assigned_by');
     }
+
+    public function barangay(): BelongsTo
+    {
+        return $this->belongsTo(Barangay::class, 'barangay_id');
+    }
+
+    public function department(): BelongsTo
+    {
+        return $this->belongsTo(Department::class, 'department_id');
+    }
 }

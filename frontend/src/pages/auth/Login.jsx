@@ -1,8 +1,13 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+
 import tagoloanSeal from "../../assets/System_Logo.png";
 import { supabase } from "../../lib/supabase";
-import { getAuthenticatedProfile } from "../../lib/api";
+import {
+    getCitizenProfile,
+    getAuthenticatedProfile,
+} from "../../lib/api";
+import { useAuth } from "../../context/AuthContext";
 
 const focusRing =
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2";
@@ -24,7 +29,20 @@ const personnelRoles = [
     "Department_Personnel",
 ];
 
-// NEW: small spinner used inside the buttons
+const destinations = {
+    "System Administrator": "/admin/dashboard",
+    "LGU-Staff": "/staff/dashboard",
+    Barangay_Head: "/barangay/dashboard",
+    Department_Head: "/department/dashboard",
+    Department_Personnel: "/personnel/dashboard",
+};
+
+/*
+|--------------------------------------------------------------------------
+| Reusable Components
+|--------------------------------------------------------------------------
+*/
+
 function Spinner({ className = "h-4 w-4" }) {
     return (
         <svg
@@ -41,6 +59,7 @@ function Spinner({ className = "h-4 w-4" }) {
                 strokeWidth="3"
                 className="opacity-25"
             />
+
             <path
                 d="M21 12a9 9 0 0 0-9-9"
                 stroke="currentColor"
@@ -60,6 +79,7 @@ function Field({ id, label, children }) {
             >
                 {label}
             </label>
+
             {children}
         </div>
     );
@@ -103,98 +123,128 @@ function PasswordInput({
     );
 }
 
+/*
+|--------------------------------------------------------------------------
+| Login Page
+|--------------------------------------------------------------------------
+*/
+
 function Login() {
     const navigate = useNavigate();
+    const { refreshProfile } = useAuth();
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [notice, setNotice] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
-
-    // NEW: remembers which action is running ("google" | "login" | "reset")
-    // so only that button shows its loading state.
     const [activeAction, setActiveAction] = useState(null);
 
-    // Get the authenticated user's profile and redirect by role.
-    async function finishLogin(expectedAccountType) {
-        const result = await getAuthenticatedProfile();
+    /*
+    |--------------------------------------------------------------------------
+    | Authentication and Redirection
+    |--------------------------------------------------------------------------
+    */
 
-        if (!result?.profile) {
-            throw new Error("Your user profile could not be retrieved.");
-        }
+    const finishLogin = useCallback(
+        async (expectedAccountType) => {
+            const result =
+                expectedAccountType === "citizen"
+                    ? await getCitizenProfile()
+                    : await getAuthenticatedProfile();
 
-        const role = result.profile.role;
+            if (!result?.profile) {
+                throw new Error(
+                    "Your user profile could not be retrieved."
+                );
+            }
 
-        // Citizens must use Google authentication.
-        if (expectedAccountType === "citizen" && role !== "citizen") {
-            throw new Error(
-                "This account is not registered as a citizen account."
-            );
-        }
+            const profile = result.profile;
+            const role = profile.role;
 
-        // Internal accounts must have an authorized personnel role.
-        if (
-            expectedAccountType === "personnel" &&
-            !personnelRoles.includes(role)
-        ) {
-            throw new Error(
-                "This account is not authorized for personnel access."
-            );
-        }
+            if (
+                expectedAccountType === "citizen" &&
+                role !== "citizen"
+            ) {
+                throw new Error(
+                    "This account is not registered as a citizen account."
+                );
+            }
 
-        switch (role) {
-            case "citizen":
-                navigate("/citizen/dashboard", { replace: true });
-                break;
+            if (
+                expectedAccountType === "personnel" &&
+                !personnelRoles.includes(role)
+            ) {
+                throw new Error(
+                    "This account is not authorized for personnel access."
+                );
+            }
 
-            case "System Administrator":
-                navigate("/admin/dashboard", { replace: true });
-                break;
+            await refreshProfile();
 
-            case "LGU-Staff":
-                navigate("/staff/dashboard", { replace: true });
-                break;
+            // Citizen navigation.
+            if (role === "citizen") {
+                if (
+                    result.requires_onboarding ||
+                    !profile.barangay_id
+                ) {
+                    navigate("/onboarding", { replace: true });
+                } else {
+                    navigate("/citizen/dashboard", {
+                        replace: true,
+                    });
+                }
 
-            case "Barangay_Head":
-                navigate("/barangay/dashboard", { replace: true });
-                break;
+                return;
+            }
 
-            case "Department_Head":
-                navigate("/department/dashboard", { replace: true });
-                break;
+            // Personnel navigation.
+            const destination = destinations[role];
 
-            case "Department_Personnel":
-                navigate("/personnel/dashboard", { replace: true });
-                break;
+            if (!destination) {
+                throw new Error(
+                    "Your account has an unrecognized role."
+                );
+            }
 
-            default:
-                throw new Error("Your account has an unrecognized role.");
-        }
-    }
+            navigate(destination, { replace: true });
+        },
+        [navigate, refreshProfile]
+    );
 
-    // Complete Google OAuth login after returning to the application.
+    /*
+    |--------------------------------------------------------------------------
+    | Google OAuth Callback
+    |--------------------------------------------------------------------------
+    */
+
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const isGoogleCallback = params.get("auth") === "google";
 
-        if (!isGoogleCallback) return;
+        if (!isGoogleCallback) {
+            return;
+        }
 
         let active = true;
 
         async function verifyGoogleLogin() {
             try {
                 setIsLoading(true);
-                setActiveAction("google"); // NEW
+                setActiveAction("google");
 
                 const {
                     data: { session },
                     error,
                 } = await supabase.auth.getSession();
 
-                if (error) throw error;
+                if (error) {
+                    throw error;
+                }
 
                 if (!session?.access_token) {
-                    throw new Error("Google login was not completed.");
+                    throw new Error(
+                        "Google login was not completed."
+                    );
                 }
 
                 await finishLogin("citizen");
@@ -210,80 +260,110 @@ function Login() {
             } finally {
                 if (active) {
                     setIsLoading(false);
-                    setActiveAction(null); // NEW
-                    window.history.replaceState({}, "", "/login");
+                    setActiveAction(null);
+
+                    window.history.replaceState(
+                        {},
+                        "",
+                        "/login"
+                    );
                 }
             }
         }
 
-        verifyGoogleLogin();
+        void verifyGoogleLogin();
 
         return () => {
             active = false;
         };
-    }, []);
+    }, [finishLogin]);
 
-    // Citizen login through Google OAuth.
+    /*
+    |--------------------------------------------------------------------------
+    | Citizen Login
+    |--------------------------------------------------------------------------
+    */
+
     async function handleGoogleLogin() {
-        if (isLoading) return;
+        if (isLoading) {
+            return;
+        }
 
         setIsLoading(true);
-        setActiveAction("google"); // NEW
+        setActiveAction("google");
+
         setNotice({
             type: "info",
             text: "Connecting to Google...",
         });
 
         try {
-            const { error } = await supabase.auth.signInWithOAuth({
-                provider: "google",
-                options: {
-                    redirectTo: `${window.location.origin}/login?auth=google`,
-                    queryParams: {
-                        prompt: "select_account",
+            const { error } =
+                await supabase.auth.signInWithOAuth({
+                    provider: "google",
+                    options: {
+                        redirectTo: `${window.location.origin}/login?auth=google`,
+                        queryParams: {
+                            prompt: "select_account",
+                        },
                     },
-                },
-            });
+                });
 
-            if (error) throw error;
+            if (error) {
+                throw error;
+            }
         } catch (error) {
             setNotice({
                 type: "error",
-                text: error.message || "Unable to sign in with Google.",
+                text:
+                    error.message ||
+                    "Unable to sign in with Google.",
             });
 
             setIsLoading(false);
-            setActiveAction(null); // NEW
+            setActiveAction(null);
         }
     }
 
-    // Personnel login through email and password.
+    /*
+    |--------------------------------------------------------------------------
+    | Personnel Login
+    |--------------------------------------------------------------------------
+    */
+
     async function handleSubmit(event) {
         event.preventDefault();
 
-        if (isLoading) return;
+        if (isLoading) {
+            return;
+        }
 
         const normalizedEmail = email.trim().toLowerCase();
 
         if (!normalizedEmail || !password) {
             setNotice({
                 type: "error",
-                text: "Please enter your email address and password.",
+                text:
+                    "Please enter your email address and password.",
             });
+
             return;
         }
 
         setNotice(null);
         setIsLoading(true);
-        setActiveAction("login"); // NEW
+        setActiveAction("login");
 
         try {
-            const { error } = await supabase.auth.signInWithPassword({
-                email: normalizedEmail,
-                password,
-            });
+            const { error } =
+                await supabase.auth.signInWithPassword({
+                    email: normalizedEmail,
+                    password,
+                });
 
-            if (error) throw error;
+            if (error) {
+                throw error;
+            }
 
             await finishLogin("personnel");
         } catch (error) {
@@ -295,38 +375,49 @@ function Login() {
             });
         } finally {
             setIsLoading(false);
-            setActiveAction(null); // NEW
+            setActiveAction(null);
         }
     }
 
-    // Request a password reset email.
+    /*
+    |--------------------------------------------------------------------------
+    | Password Reset
+    |--------------------------------------------------------------------------
+    */
+
     async function handleForgotPassword() {
-        if (isLoading) return;
+        if (isLoading) {
+            return;
+        }
 
         const normalizedEmail = email.trim().toLowerCase();
 
         if (!normalizedEmail) {
             setNotice({
                 type: "info",
-                text: "Enter your email address first to reset your password.",
+                text:
+                    "Enter your email address first to reset your password.",
             });
+
             return;
         }
 
         setNotice(null);
         setIsLoading(true);
-        setActiveAction("reset"); // NEW
+        setActiveAction("reset");
 
         try {
             const { error } =
                 await supabase.auth.resetPasswordForEmail(
                     normalizedEmail,
                     {
-                        redirectTo: `${window.location.origin}/reset-password`,
+                        redirectTo: `${window.location.origin}/set-password`,
                     }
                 );
 
-            if (error) throw error;
+            if (error) {
+                throw error;
+            }
 
             setNotice({
                 type: "info",
@@ -342,9 +433,15 @@ function Login() {
             });
         } finally {
             setIsLoading(false);
-            setActiveAction(null); // NEW
+            setActiveAction(null);
         }
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Page UI
+    |--------------------------------------------------------------------------
+    */
 
     return (
         <div className="grid min-h-screen bg-white font-sans text-slate-900 antialiased lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
@@ -384,9 +481,9 @@ function Login() {
                     </h2>
 
                     <p className="mt-4 text-base leading-7 text-emerald-100/80">
-                        Log in to send a complaint to the Municipality of
-                        Tagoloan and watch it move from submission to
-                        resolution.
+                        Log in to send a complaint to the Municipality
+                        of Tagoloan and watch it move from submission
+                        to resolution.
                     </p>
 
                     <ul className="mt-9 space-y-4">
@@ -494,7 +591,6 @@ function Login() {
                             </div>
                         )}
 
-                        {/* Google button: loads only when Google is the active action */}
                         <button
                             type="button"
                             onClick={handleGoogleLogin}
@@ -596,7 +692,6 @@ function Login() {
                                 </button>
                             </div>
 
-                            {/* Login button: loads only when Login is the active action */}
                             <button
                                 type="submit"
                                 disabled={isLoading}
@@ -604,6 +699,7 @@ function Login() {
                                 className={`flex min-h-12 w-full items-center justify-center gap-2 rounded-md bg-emerald-800 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-900 disabled:cursor-not-allowed disabled:opacity-60 ${focusRing}`}
                             >
                                 {activeAction === "login" && <Spinner />}
+
                                 {activeAction === "login"
                                     ? "Please wait..."
                                     : "Log in"}
@@ -611,14 +707,15 @@ function Login() {
                         </form>
 
                         <p className="mt-8 text-center text-xs leading-6 text-slate-500">
-                            Internal accounts are created and managed by the
-                            System Administrator.
+                            Internal accounts are created and managed by
+                            the System Administrator.
                         </p>
                     </section>
                 </main>
 
                 <footer className="px-6 py-6 text-center text-xs text-slate-500 sm:px-10">
-                    © {new Date().getFullYear()} BantaySerbisyo · Municipality of Tagoloan
+                    © {new Date().getFullYear()} BantaySerbisyo ·
+                    Municipality of Tagoloan
                 </footer>
             </div>
         </div>

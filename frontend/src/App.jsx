@@ -1,4 +1,3 @@
-
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import { AuthProvider } from "./context/AuthContext";
@@ -25,6 +24,7 @@ import AssignedComplaints from "./pages/barangay/AssignedComplaints";
 import DepartmentDashboard from "./pages/department-head/Dashboard";
 import ComplaintAssignment from "./pages/department-head/ComplaintAssignment";
 import DepartmentPersonnelDirectory from "./pages/department-head/PersonnelDirectory";
+import DepartmentMonitoring from "./pages/department-head/DepartmentMonitoring";
 import PersonnelDashboard from "./pages/department-personnel/Dashboard";
 import MyAssignments from "./pages/department-personnel/MyAssignments";
 import ComplaintWorkDetails from "./pages/department-personnel/ComplaintWorkDetails";
@@ -33,89 +33,94 @@ import ComplaintQueue from "./pages/staff/ComplaintQueue";
 import ComplaintReview from "./pages/staff/ComplaintReview";
 import EscalationInbox from "./pages/staff/EscalationInbox";
 import ComplaintHistory from "./pages/staff/ComplaintHistory";
+import ResolutionQueue from "./pages/staff/ResolutionQueue";
+import StaffReports from "./pages/staff/StaffReports";
+
 
 function App() {
     return (
         <ThemeProvider>
-        <AuthProvider>
-            <Routes>
+            <AuthProvider>
+                <Routes>
 
-                //* Public routes 
-                <Route path="/" element={ window.location.hash.includes("type=invite") ? 
-                <Navigate to="/set-password" replace /> :<Landing />}/>
-                <Route path="/login" element={<Login />} />
-                <Route path="/onboarding" element={<Onboarding />} />
-                <Route path="/set-password" element={<SetPassword />} />
+                    {/* Public routes */}
+                    <Route path="/" element={ window.location.hash.includes("type=invite") ?
+                    <Navigate to="/set-password" replace /> :<Landing />}/>
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/onboarding" element={<Onboarding />} />
+                    <Route path="/set-password" element={<SetPassword />} />
 
-                //* Citizen routes 
-                <Route element={
-                    <ProtectedRoute allowedRoles={["citizen"]} />
-                }>
-                    <Route path="/citizen" element={<CitizenLanding />} />
-                    <Route path="/citizen/dashboard" element={<CitizenDashboard />} />
-                    <Route path="/citizen/complaints" element={<CitizenDashboard />} />
-                    <Route path="/citizen/complaints/new" element={<CreateComplaint />} />
-                    <Route path="/citizen/complaints/:id" element={<ComplaintDetails />} />
-                    <Route path="/citizen/complaint-details" element={<ComplaintDetails />} />
-                    <Route path="/citizen/notifications" element={<Notifications />} />
-                    <Route path="/citizen/feedback" element={<Feedback />} />
-                    <Route path="/citizen/profile" element={<Profile />} />
-                    <Route path="/citizen/help-support" element={<HelpSupport />} />
-                </Route>
+                    {/* Citizen routes */}
+                    <Route element={
+                        <ProtectedRoute allowedRoles={["citizen"]} />
+                    }>
+                        <Route path="/citizen" element={<CitizenLanding />} />
+                        <Route path="/citizen/dashboard" element={<CitizenDashboard />} />
+                        <Route path="/citizen/complaints" element={<CitizenDashboard />} />
+                        <Route path="/citizen/complaints/new" element={<CreateComplaint />} />
+                        <Route path="/citizen/complaints/:id" element={<ComplaintDetails />} />
+                        <Route path="/citizen/complaint-details" element={<ComplaintDetails />} />
+                        <Route path="/citizen/notifications" element={<Notifications />} />
+                        <Route path="/citizen/feedback" element={<Feedback />} />
+                        <Route path="/citizen/profile" element={<Profile />} />
+                        <Route path="/citizen/help-support" element={<HelpSupport />} />
+                    </Route>
 
-                //* Admin routes 
-                <Route element={
-                    <ProtectedRoute allowedRoles={["System Administrator"]} />
-                }>
-                    <Route path="/admin/dashboard" element={<AdminDashboard />} />
-                    <Route path="/admin/users" element={<UserManagement />} />
-                    <Route path="/admin/barangays" element={<BarangayPage />} />
-                    <Route path="/admin/departments" element={<DepartmentPage />} />
-                </Route>
+                    {/* Admin routes */}
+                    <Route element={
+                        <ProtectedRoute allowedRoles={["System Administrator"]} />
+                    }>
+                        <Route path="/admin/dashboard" element={<AdminDashboard />} />
+                        <Route path="/admin/users" element={<UserManagement />} />
+                        <Route path="/admin/barangays" element={<BarangayPage />} />
+                        <Route path="/admin/departments" element={<DepartmentPage />} />
+                    </Route>
 
-                //* Barangay Head routes
-                <Route element={
-                    <ProtectedRoute allowedRoles={["Barangay_Head"]} />
-                }>
-                    <Route path="/barangay/dashboard" element={<BarangayDashboard />} />
-                    <Route path="/barangay/complaints" element={<AssignedComplaints />} />
-                </Route>
+                    {/* Barangay Head routes */}
+                    <Route element={
+                        <ProtectedRoute allowedRoles={["Barangay_Head"]} />
+                    }>
+                        <Route path="/barangay/dashboard" element={<BarangayDashboard />} />
+                        <Route path="/barangay/complaints" element={<AssignedComplaints />} />
+                    </Route>
 
-                //* Department Head routes
-                <Route element={
-                    <ProtectedRoute allowedRoles={["Department_Head"]} />
-                }>
-                    <Route path="/department/dashboard" element={<DepartmentDashboard />} />
-                    <Route path="/department/assignments" element={<ComplaintAssignment />} />
-                    <Route path="/department/personnel" element={<DepartmentPersonnelDirectory />} />
-                </Route>
+                    {/* Department Head routes */}
+                    <Route element={
+                        <ProtectedRoute allowedRoles={["Department_Head"]} />
+                    }>
+                        <Route path="/department/dashboard" element={<DepartmentDashboard />} />
+                        <Route path="/department/assignments" element={<ComplaintAssignment />} />
+                        <Route path="/department/monitoring" element={<DepartmentMonitoring />} />
+                        <Route path="/department/personnel" element={<DepartmentPersonnelDirectory />} />
+                    </Route>
 
-                //* Department Personnel routes
-                <Route element={
-                    <ProtectedRoute allowedRoles={["Department_Personnel"]} />
-                }>
-                    <Route path="/personnel/dashboard" element={<PersonnelDashboard />} />
-                    <Route path="/personnel/assignments" element={<MyAssignments />} />
-                    <Route path="/personnel/assignments/:id" element={<ComplaintWorkDetails />} />
-                </Route>
+                    {/* Department Personnel routes */}
+                    <Route element={
+                        <ProtectedRoute allowedRoles={["Department_Personnel"]} />
+                    }>
+                        <Route path="/personnel/dashboard" element={<PersonnelDashboard />} />
+                        <Route path="/personnel/assignments" element={<MyAssignments />} />
+                        <Route path="/personnel/assignments/:id" element={<ComplaintWorkDetails />} />
+                    </Route>
 
-                //* LGU-Staff routes
-                <Route element={
-                    <ProtectedRoute allowedRoles={["LGU-Staff"]} />
-                    
-                }>
-                    <Route path="/staff/dashboard" element={<StaffDashboard />} />
-                    <Route path="/staff/complaints" element={<ComplaintQueue />} />
-                    <Route path="/staff/complaints/history" element={<ComplaintHistory />} />
-                    <Route path="/staff/complaints/:id" element={<ComplaintReview />} />
-                    <Route path="/staff/escalations" element={<EscalationInbox />} />
-                </Route>
+                    {/* LGU-Staff routes */}
+                    <Route element={
+                        <ProtectedRoute allowedRoles={["LGU-Staff"]} />
+                    }>
+                        <Route path="/staff/dashboard" element={<StaffDashboard />} />
+                        <Route path="/staff/complaints" element={<ComplaintQueue />} />
+                        <Route path="/staff/complaints/history" element={<ComplaintHistory />} />
+                        <Route path="/staff/complaints/:id" element={<ComplaintReview />} />
+                        <Route path="/staff/escalations" element={<EscalationInbox />} />
+                        <Route path="/staff/resolutions" element={<ResolutionQueue />} />
+                        <Route path="/staff/reports" element={<StaffReports />} />
+                    </Route>
 
-                //* Unknown route
-                <Route path="*" element={<Navigate to="/" replace />} />
+                    {/* Unknown route */}
+                    <Route path="*" element={<Navigate to="/" replace />} />
 
-            </Routes>
-        </AuthProvider>
+                </Routes>
+            </AuthProvider>
         </ThemeProvider>
     );
 }

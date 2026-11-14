@@ -3,6 +3,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\ComplaintAttachment;
+use App\Models\ComplaintResolutionAttachment;
 use App\Models\Profile;
 use App\Services\SupabaseStorageService;
 use Illuminate\Http\Request;
@@ -29,14 +30,15 @@ class ComplaintAttachmentController extends Controller
         // * Find the user's profile
         $profile = Profile::find($user['id']);
 
-        if (!$profile) {
+        if (!$profile || !$profile->is_active) {
             return response()->json([
-                'message' => 'Profile not found.',
+                'message' => 'Active profile not found.',
             ], 403);
         }
 
         // * Find the requested attachment
-        $attachment = ComplaintAttachment::find($attachmentId);
+        $attachment = ComplaintAttachment::find($attachmentId)
+            ?? ComplaintResolutionAttachment::find($attachmentId);
 
         if (!$attachment) {
             return response()->json([
@@ -45,7 +47,9 @@ class ComplaintAttachmentController extends Controller
         }
 
         // * Get the complaint related to this attachment
-        $complaint = $attachment->complaint;
+        $complaint = $attachment instanceof ComplaintAttachment
+            ? $attachment->complaint
+            : $attachment->resolution?->complaint;
 
         if (!$complaint) {
             return response()->json([
