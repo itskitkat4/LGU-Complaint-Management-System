@@ -2,11 +2,20 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
+use App\Database\SqliteComplaintStatusConstraints;
 
 return new class extends Migration
 {
+    use SqliteComplaintStatusConstraints;
+
     public function up(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            $this->applySqliteComplaintStatusConstraints();
+
+            return;
+        }
+
         DB::statement('ALTER TABLE complaints DROP CONSTRAINT IF EXISTS complaints_status_check');
         DB::statement(<<<'SQL'
             ALTER TABLE complaints
@@ -71,6 +80,12 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            $this->applySqliteComplaintStatusConstraints();
+
+            return;
+        }
+
         DB::statement('ALTER TABLE complaints DROP CONSTRAINT IF EXISTS complaints_status_check');
         DB::statement(<<<'SQL'
             ALTER TABLE complaints

@@ -11,6 +11,10 @@ class NotificationController extends Controller
 {
     public function index(Request $request)
     {
+        $validated = $request->validate([
+            'page' => ['sometimes', 'integer', 'min:1'],
+        ]);
+
         $user = $request->attributes->get('supabase_user');
 
         if (!$user || empty($user['id'])) {
@@ -27,11 +31,25 @@ class NotificationController extends Controller
             ], 404);
         }
 
-        $notifications = Notification::query()
+        $query = Notification::query()
             ->where('profile_id', $profile->id)
             ->with('complaint:id,title,status')
             ->orderByDesc('created_at')
-            ->paginate(10);
+            ->orderByDesc('id');
+
+        $requestedPage = (int) ($validated['page'] ?? 1);
+        $notifications = $query->paginate(10, ['*'], 'page', $requestedPage);
+
+        // Laravel safely returns an empty page for an out-of-range page number.
+        // Clamp it to the last available page so clients receive coherent metadata.
+        if ($notifications->currentPage() > $notifications->lastPage()) {
+            $notifications = $query->paginate(
+                10,
+                ['*'],
+                'page',
+                $notifications->lastPage()
+            );
+        }
 
         return response()->json([
             'message' => 'Notifications retrieved Successfully',

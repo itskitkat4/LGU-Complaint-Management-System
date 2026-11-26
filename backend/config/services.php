@@ -18,7 +18,8 @@ return [
         'url' => env('SUPABASE_URL'),
         'publishable_key' => env('SUPABASE_PUBLISHABLE_KEY'),
         'secret_key' => env('SUPABASE_SECRET_KEY'),
-        'frontend_url' => env('FRONTEND_URL', 'http://localhost:5173'),
+        // Require an explicit public frontend URL for emailed invitation links.
+        'frontend_url' => env('FRONTEND_URL'),
         'storage_bucket' => env(
             'SUPABASE_STORAGE_BUCKET',
             'complaint-attachments'
@@ -28,6 +29,15 @@ return [
             'SUPABASE_REPORTS_STORAGE_BUCKET',
             'reports'
         ),
+    ],
+
+    'groq' => [
+        'api_key' => env('GROQ_API_KEY'),
+        'model' => env('GROQ_MODEL', 'openai/gpt-oss-20b'),
+        'base_url' => 'https://api.groq.com/openai/v1',
+        // 20,000 Unicode characters caps total conversation input size while
+        // retaining room for detailed complaint histories.
+        'max_conversation_characters' => env('GROQ_MAX_CONVERSATION_CHARACTERS', 20000),
     ],
 
 

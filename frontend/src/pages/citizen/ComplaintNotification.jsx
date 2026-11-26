@@ -1,9 +1,9 @@
-
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import CitizenLayout from "../../layouts/CitizenLayout";
 import {
-  getCitizenNotifications,
+  announceNotificationsChanged,
+  getCitizenNotificationsPage,
   getUnreadNotificationCount,
   markNotificationAsRead,
   markAllNotificationsAsRead,
@@ -57,7 +57,7 @@ function InfoIcon() {
 
 function NotificationIcon() {
   return (
-    <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+    <div className="glass-icon flex h-16 w-16 items-center justify-center rounded-2xl">
       <BellIcon className="h-8 w-8" />
     </div>
   );
@@ -84,52 +84,77 @@ function formatNotificationDate(dateValue) {
 export default function Notifications() {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [loadFailed, setLoadFailed] = useState(false);
   const [markingId, setMarkingId] = useState(null);
   const [markingAll, setMarkingAll] = useState(false);
-
-  const loadNotifications = useCallback(async () => {
-    try {
-      const [notificationData, unreadData] = await Promise.all([
-        getCitizenNotifications(),
-        getUnreadNotificationCount(),
-      ]);
-
-      setNotifications(
-        Array.isArray(notificationData) ? notificationData : []
-      );
-
-      setUnreadCount(Number(unreadData) || 0);
-      setError("");
-    } catch (err) {
-      setError(err.message || "Failed to load notifications.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const [retryKey, setRetryKey] = useState(0);
+  const requestSequence = useRef(0);
 
   useEffect(() => {
-  let isMounted = true;
+    const controller = new AbortController();
+    const requestId = ++requestSequence.current;
+    let isActive = true;
 
-  Promise.resolve()
-    .then(() => {
-      if (isMounted) {
-        return loadNotifications();
-      }
+    Promise.all([
+      getCitizenNotificationsPage(page, { signal: controller.signal }),
+      getUnreadNotificationCount({ signal: controller.signal }),
+    ])
+      .then(([pageResult, unreadData]) => {
+        if (!isActive || requestId !== requestSequence.current) return;
 
-      return undefined;
-    });
+        setNotifications(pageResult.notifications);
+        setPagination({
+          current_page: pageResult.currentPage,
+          last_page: pageResult.lastPage,
+          per_page: pageResult.perPage,
+          total: pageResult.total,
+          next_page_url: pageResult.nextPageUrl,
+          prev_page_url: pageResult.previousPageUrl,
+        });
+        setUnreadCount(Number(unreadData) || 0);
+      })
+      .catch((requestError) => {
+        if (
+          !isActive ||
+          requestId !== requestSequence.current ||
+          requestError.name === "AbortError"
+        ) {
+          return;
+        }
 
-  return () => {
-    isMounted = false;
-  };
-}, [loadNotifications]);
+        setError(requestError.message || "Failed to load notifications.");
+        setLoadFailed(true);
+      })
+      .finally(() => {
+        if (isActive && requestId === requestSequence.current) {
+          setLoading(false);
+        }
+      });
 
-  async function handleRetry() {
+    return () => {
+      isActive = false;
+      controller.abort();
+    };
+  }, [page, retryKey]);
+
+  function changePage(nextPage) {
     setLoading(true);
     setError("");
-    await loadNotifications();
+    setLoadFailed(false);
+    setNotifications([]);
+    setPage(nextPage);
+  }
+
+  function handleRetry() {
+    setLoading(true);
+    setError("");
+    setLoadFailed(false);
+    setNotifications([]);
+    setRetryKey((current) => current + 1);
   }
 
   async function handleMarkAsRead(notificationId) {
@@ -138,6 +163,7 @@ export default function Notifications() {
 
     try {
       await markNotificationAsRead(notificationId);
+      announceNotificationsChanged();
 
       setNotifications((currentNotifications) =>
         currentNotifications.map((notification) =>
@@ -171,6 +197,7 @@ export default function Notifications() {
 
     try {
       await markAllNotificationsAsRead();
+      announceNotificationsChanged();
 
       setNotifications((currentNotifications) =>
         currentNotifications.map((notification) => ({
@@ -196,24 +223,27 @@ export default function Notifications() {
       <section className="space-y-6">
         {/* Page Header */}
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-          <div>
-            <p className="text-sm font-medium text-emerald-700">
-              Citizen Portal
-            </p>
+          <div className="flex items-start gap-3">
+            <span className="mt-1 h-16 w-1 shrink-0 rounded-full bg-emerald-500" aria-hidden="true" />
+            <div>
+              <p className="text-sm font-medium text-emerald-700">
+                Citizen Portal
+              </p>
 
-            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
-              Notifications
-            </h1>
+              <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
+                Notifications
+              </h1>
 
-            <p className="mt-2 text-sm text-slate-500">
-              Stay updated on the progress of your complaints.
-            </p>
+              <p className="mt-2 text-sm text-slate-500">
+                Stay updated on the progress of your complaints.
+              </p>
+            </div>
           </div>
 
           {loading ? (
-            <Skeleton className="h-11 w-52 rounded-lg" />
+            <Skeleton className="h-11 w-52 rounded-xl" />
           ) : (
-            <div className="inline-flex w-fit items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600">
+            <div className="glass inline-flex w-fit items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-600">
               <BellIcon className="h-5 w-5 text-emerald-700" />
 
               {unreadCount === 0
@@ -229,7 +259,7 @@ export default function Notifications() {
         {error && (
           <div
             role="alert"
-            className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+            className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
           >
             <p>{error}</p>
 
@@ -246,7 +276,7 @@ export default function Notifications() {
         )}
 
         {/* Recent Activity */}
-        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <section className="glass overflow-hidden rounded-2xl">
           <div className="flex flex-col justify-between gap-3 border-b border-slate-100 px-5 py-5 sm:flex-row sm:items-center sm:px-6">
             <div>
               <h2 className="font-semibold text-slate-900">
@@ -265,7 +295,7 @@ export default function Notifications() {
                   type="button"
                   onClick={handleMarkAllAsRead}
                   disabled={markingAll || markingId !== null}
-                  className="w-fit rounded-lg px-3 py-2 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="w-fit rounded-xl px-3 py-2 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {markingAll
                     ? "Marking..."
@@ -298,6 +328,10 @@ export default function Notifications() {
                 </div>
               ))}
             </div>
+          ) : loadFailed && notifications.length === 0 ? (
+            <p role="status" className="px-5 py-12 text-center text-sm text-slate-600 sm:px-6">
+              Notifications could not be loaded. Please try again.
+            </p>
           ) : notifications.length === 0 ? (
             /* Empty State */
             <div className="flex flex-col items-center justify-center px-6 py-16 text-center sm:py-20">
@@ -314,7 +348,7 @@ export default function Notifications() {
 
               <Link
                 to="/citizen/complaints"
-                className="mt-6 inline-flex items-center justify-center rounded-lg bg-emerald-800 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2"
+                className="glass-btn-primary mt-6 inline-flex items-center justify-center rounded-xl px-5 py-2.5 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2"
               >
                 View My Complaints
               </Link>
@@ -328,10 +362,10 @@ export default function Notifications() {
                 return (
                   <article
                     key={notification.id}
-                    className={`flex flex-col gap-3 px-5 py-5 transition sm:flex-row sm:items-start sm:justify-between sm:px-6 ${
+                    className={`flex flex-col gap-3 px-5 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6 ${
                       isUnread
-                        ? "bg-emerald-50/50"
-                        : "bg-white"
+                        ? "glass-soft"
+                        : "glass-hover"
                     }`}
                   >
                     <div className="flex min-w-0 items-start gap-4">
@@ -380,7 +414,7 @@ export default function Notifications() {
                           markingId === notification.id ||
                           markingAll
                         }
-                        className="w-fit shrink-0 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="glass-btn-secondary w-fit shrink-0 rounded-xl border border-emerald-200 px-3 py-2 text-xs font-semibold text-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {markingId === notification.id
                           ? "Marking..."
@@ -394,8 +428,40 @@ export default function Notifications() {
           )}
         </section>
 
+        {!loading && pagination && (
+          <nav
+            aria-label="Notification pages"
+            className="glass flex flex-col items-center justify-between gap-3 rounded-2xl px-5 py-4 sm:flex-row"
+          >
+            <p className="text-sm text-slate-600" aria-live="polite">
+              Page {pagination.current_page} of {pagination.last_page}
+              <span className="mx-2 text-slate-300" aria-hidden="true">·</span>
+              {pagination.total} notification{pagination.total === 1 ? "" : "s"}
+            </p>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => changePage(Math.max(1, page - 1))}
+                disabled={loading || pagination.current_page <= 1}
+                className="glass-btn-secondary rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                onClick={() => changePage(Math.min(pagination.last_page, page + 1))}
+                disabled={loading || pagination.current_page >= pagination.last_page}
+                className="glass-btn-secondary rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          </nav>
+        )}
+
         {/* Information */}
-        <section className="flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50 p-4 sm:p-5">
+        <section className="flex items-start gap-3 rounded-2xl border border-blue-100 bg-blue-50 p-4 sm:p-5">
           <div className="mt-0.5 shrink-0 text-blue-700">
             <InfoIcon />
           </div>

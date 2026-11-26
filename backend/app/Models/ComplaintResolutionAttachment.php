@@ -19,6 +19,7 @@ class ComplaintResolutionAttachment extends Model
         'file_name',
         'mime_type',
         'file_size',
+        'evidence_type',
     ];
 
     public $timestamps = false;

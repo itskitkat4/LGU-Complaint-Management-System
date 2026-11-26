@@ -134,6 +134,12 @@ class StaffComplaintController extends Controller
                 'string',
                 'max:1000',
             ],
+
+            'priority' => [
+                'required_if:decision,start_review',
+                'nullable',
+                Rule::in(['low', 'medium', 'high', 'urgent']),
+            ],
         ]);
 
         $complaint = Complaint::find($complaintId);
@@ -171,6 +177,9 @@ class StaffComplaintController extends Controller
 
             $complaint->status = $newStatus;
             $complaint->resolution_level = $resolutionLevel;
+            if (isset($validated['priority'])) {
+                $complaint->priority = $validated['priority'];
+            }
             $complaint->rejection_reason = $newStatus === 'declined'
                 ? $validated['rejection_reason']
                 : null;
@@ -504,7 +513,7 @@ class StaffComplaintController extends Controller
             'requester',
             'originBarangay',
             'destinationDepartment',
-            'complaint:id,title,status,category_id',
+            'complaint:id,title,status,category_id,is_anonymous',
             'complaint.category:id,name',
         ])
             ->where('escalation_type', 'barangay_to_department')

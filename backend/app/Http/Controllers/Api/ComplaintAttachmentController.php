@@ -61,8 +61,13 @@ class ComplaintAttachmentController extends Controller
         $allowed = false;
 
         if ($profile->role === 'citizen') {
-            // Citizens can only access their own complaints
-            $allowed = $complaint->citizen_id === $profile->id;
+            // Citizens can only access their own complaints and approved
+            // resolution evidence.
+            $isApprovedResolution = !($attachment instanceof ComplaintResolutionAttachment)
+                || $attachment->resolution?->review_status === 'approved';
+
+            $allowed = $complaint->citizen_id === $profile->id
+                && $isApprovedResolution;
 
         } elseif ($profile->role === 'LGU-Staff') {
             // LGU-Staff can access complaint attachments for review
@@ -78,6 +83,8 @@ class ComplaintAttachmentController extends Controller
             $allowed = DB::table('complaint_assignments')
                 ->where('complaint_id', $complaint->id)
                 ->where('assigned_to', $profile->id)
+                ->where('assignment_level', 'lgu')
+                ->where('department_id', $profile->department_id)
                 ->whereNull('ended_at')
                 ->exists();
 
@@ -85,19 +92,23 @@ class ComplaintAttachmentController extends Controller
             $profile->role === 'Department_Head'
             && !empty($profile->department_id)
         ) {
-            // Department Head can access complaints assigned
-            // to active personnel belonging to their department
+            // Department Heads can access complaints actively assigned to
+            // themselves or to personnel in their department.
             $allowed = DB::table('complaint_assignments as ca')
-                ->join(
-                    'profiles as personnel',
-                    'personnel.id',
-                    '=',
-                    'ca.assigned_to'
-                )
                 ->where('ca.complaint_id', $complaint->id)
+                ->where('ca.assignment_level', 'lgu')
+                ->where('ca.department_id', $profile->department_id)
                 ->whereNull('ca.ended_at')
-                ->where('personnel.department_id', $profile->department_id)
-                ->where('personnel.role', 'Department_Personnel')
+                ->where(function ($query) use ($profile) {
+                    $query->where('ca.assigned_to', $profile->id)
+                        ->orWhereExists(function ($personnelQuery) use ($profile) {
+                            $personnelQuery->selectRaw('1')
+                                ->from('profiles as personnel')
+                                ->whereColumn('personnel.id', 'ca.assigned_to')
+                                ->where('personnel.department_id', $profile->department_id)
+                                ->where('personnel.role', 'Department_Personnel');
+                        });
+                })
                 ->exists();
         }
 

@@ -3,9 +3,14 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
+use App\Models\ComplaintAssignment;
+use App\Models\ComplaintEscalation;
 use App\Models\Department;
+use App\Models\Profile;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+
 class DepartmentController extends Controller
 {
     //GET all departments
@@ -47,12 +52,40 @@ class DepartmentController extends Controller
     }
     //DELETE delete a department
     public function delete($id) {
-        $department = Department::findOrFail($id);
+        return DB::transaction(function () use ($id) {
+            $department = Department::whereKey($id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        $department->delete();
+            $hasStaff = Profile::where('department_id', $department->id)->exists();
+            $hasComplaintAssignments = ComplaintAssignment::where(
+                'department_id',
+                $department->id
+            )->exists();
+            $hasComplaintEscalations = ComplaintEscalation::where('origin_department_id', $department->id)
+                ->orWhere('destination_department_id', $department->id)
+                ->exists();
+            $blockingReasons = [];
 
-        return response()->json([
-            'message' => 'Department deleted successfully',
-        ]);
+            if ($hasStaff) {
+                $blockingReasons[] = 'staff members are assigned to it';
+            }
+
+            if ($hasComplaintAssignments || $hasComplaintEscalations) {
+                $blockingReasons[] = 'existing complaints or complaint escalation records are associated with it';
+            }
+
+            if ($blockingReasons !== []) {
+                return response()->json([
+                    'message' => 'Department cannot be deleted because ' . implode(' and ', $blockingReasons) . '.',
+                ], 409);
+            }
+
+            $department->delete();
+
+            return response()->json([
+                'message' => 'Department deleted successfully',
+            ]);
+        });
     }
 }

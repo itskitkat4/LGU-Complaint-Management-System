@@ -18,6 +18,7 @@ class ComplaintResolution extends Model
         'complaint_id',
         'submitted_by',
         'resolution_description',
+        'completed_at',
         'review_status',
         'reviewed_by',
         'review_comment',
@@ -29,6 +30,7 @@ class ComplaintResolution extends Model
     {
         return [
             'submitted_at' => 'datetime',
+            'completed_at' => 'date',
             'reviewed_at' => 'datetime',
         ];
     }
@@ -52,4 +54,5 @@ class ComplaintResolution extends Model
     {
         return $this->hasMany(ComplaintResolutionAttachment::class, 'resolution_id');
     }
+
 }

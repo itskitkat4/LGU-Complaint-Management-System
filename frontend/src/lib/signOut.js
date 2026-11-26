@@ -1,7 +1,7 @@
 import Swal from "sweetalert2";
 import { supabase } from "./supabase";
 
-export async function confirmAndSignOut(navigate) {
+export async function confirmAndSignOut(navigate, redirectTo = "/login") {
   const confirmation = await Swal.fire({
     title: "Sign out?",
     text: "You will need to sign in again to access your account.",
@@ -16,13 +16,13 @@ export async function confirmAndSignOut(navigate) {
   });
 
   if (!confirmation.isConfirmed) return false;
-
+  
   try {
     const { error } = await supabase.auth.signOut();
 
     if (error) throw error;
 
-    navigate("/login", { replace: true });
+    navigate(redirectTo, { replace: true });
     return true;
   } catch (error) {
     await Swal.fire({

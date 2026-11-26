@@ -96,10 +96,11 @@ class BarangayHeadStartWorkTest extends TestCase
             '*' => Http::response([
                 'id' => $profileId,
                 'email' => $email,
+                'app_metadata' => ['bantayserbisyo_password_setup_completed' => true],
             ], 200),
         ]);
 
-        $this->withToken('fake-test-token');
+        $this->withToken($this->syntheticSupabaseToken($profileId, ['password']));
     }
 
     private function createComplaint(

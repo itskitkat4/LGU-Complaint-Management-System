@@ -65,6 +65,7 @@ erDiagram
     COMPLAINTS {
         uuid id PK
         uuid citizen_id FK
+        boolean is_anonymous
         uuid category_id FK
         uuid barangay_id FK
         string title
@@ -173,7 +174,7 @@ erDiagram
 
 The design is in 3NF for the current application requirements. Atomic evidence, assignment, status, resolution, escalation, and feedback records are separate rows. Reference names live in `complaint_categories`, `barangays`, and `departments`, with their IDs stored in complaint records. Stable controlled values remain checked strings; normalization does not require a lookup table for each small fixed list. See `docs/database-design.md` for the finalized logical design and implementation gaps.
 
-The chosen complaint lifecycle follows `docs/workflow-rule.md`: `submitted`, `under_review`, `accepted`, `declined`, `assigned`, `in_progress`, `pending_review`, and `resolved`. The latest source migration canonicalizes legacy values; inspect the live records and migration state before applying it.
+The approved complaint lifecycle follows `docs/workflow-rule.md`: `submitted`, `under_review`, `accepted`, `declined`, `assigned`, `in_progress`, and `resolved`. `resolved` is final; there is no separate `closed` status. `pending_review` belongs only to `complaint_resolutions.review_status`. The source migrations define complaint status constraints, but migration files alone do not establish which migrations have been applied or what values exist in the deployed database.
 
 Keep one feedback row per complaint. The feedback owner is derived from its complaint; the API must verify that the authenticated citizen owns that complaint. The latest source migration removes the duplicated `feedback.citizen_id` after checking that existing values match complaint owners. Resolution attachments reference the resolution directly, avoiding a duplicated complaint ID. Retain inactive reference records so historical complaints remain readable.
 

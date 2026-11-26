@@ -1,7 +1,7 @@
-
 import { useEffect, useState } from "react";
 import Swal from "sweetalert2";
 import StaffLayout from "../../layouts/StaffLayout";
+import { ContentSkeleton } from "../../components/Skeletons";
 import {
   getBarangayHeadComplaints,
   getDepartments,
@@ -34,6 +34,8 @@ export default function AssignedComplaints() {
   const [selectedResolution, setSelectedResolution] = useState(null);
   const [resolutionDescription, setResolutionDescription] = useState("");
   const [evidenceFiles, setEvidenceFiles] = useState([]);
+  const [beforePhoto, setBeforePhoto] = useState(null);
+  const [completedAt, setCompletedAt] = useState("");
   const [submittingResolution, setSubmittingResolution] = useState(false);
 
   // General states
@@ -169,6 +171,29 @@ export default function AssignedComplaints() {
     setSelectedResolution(complaint);
     setResolutionDescription("");
     setEvidenceFiles([]);
+    setBeforePhoto(null);
+    setCompletedAt(new Date().toISOString().slice(0, 10));
+  }
+
+  async function handleResolutionPhotoChange(event) {
+    const file = event.target.files?.[0] || null;
+    event.target.value = "";
+
+    if (!file) return;
+
+    if (
+      !["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
+      file.size > 10 * 1024 * 1024
+    ) {
+      await Swal.fire({
+        title: "Invalid photo",
+        text: "Choose a JPG, PNG, or WebP photo up to 10 MB.",
+        icon: "warning",
+      });
+      return;
+    }
+
+    setBeforePhoto(file);
   }
 
   // Handle evidence selection
@@ -236,18 +261,39 @@ export default function AssignedComplaints() {
       return;
     }
 
+    if (!beforePhoto) {
+      await Swal.fire({
+        title: "Before photo required",
+        text: "Add a before photo to document the complaint.",
+        icon: "warning",
+      });
+      return;
+    }
+
+    if (evidenceFiles.length === 0) {
+      await Swal.fire({
+        title: "Supporting evidence required",
+        text: "Attach at least one supporting evidence file with your resolution.",
+        icon: "warning",
+      });
+      return;
+    }
+
     setSubmittingResolution(true);
 
     try {
       await submitComplaintResolution(
         selectedResolution.id,
         resolutionDescription.trim(),
+        beforePhoto,
+        completedAt,
         evidenceFiles
       );
 
       setSelectedResolution(null);
       setResolutionDescription("");
       setEvidenceFiles([]);
+      setBeforePhoto(null);
 
       setReloadKey((value) => value + 1);
 
@@ -270,31 +316,29 @@ export default function AssignedComplaints() {
   return (
     <StaffLayout title="Assigned Complaints" role="Barangay Head">
       <div className="space-y-6">
-        <header>
-          <p className="text-sm font-medium text-emerald-700">
-            Barangay Portal
-          </p>
+        <header className="flex items-start gap-3">
+          <span className="mt-1 h-16 w-1 shrink-0 rounded-full bg-emerald-500" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium text-emerald-700">
+              Barangay Portal
+            </p>
 
-          <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-            Assigned complaints
-          </h2>
+            <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+              Assigned complaints
+            </h2>
 
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-            Review complaints assigned to your barangay, track status,
-            submit resolutions, and request LGU help when an issue is
-            beyond your authority.
-          </p>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+              Review complaints assigned to your barangay, track status,
+              submit resolutions, and request LGU help when an issue is
+              beyond your authority.
+            </p>
+          </div>
         </header>
 
         {loading ? (
-          <div
-            role="status"
-            className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500"
-          >
-            Loading assigned complaints…
-          </div>
+          <ContentSkeleton label="Loading assigned complaints" variant="list" rows={4} />
         ) : error ? (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
             {error}
 
             <button
@@ -306,7 +350,7 @@ export default function AssignedComplaints() {
             </button>
           </div>
         ) : complaints.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-300 bg-white px-5 py-12 text-center">
+          <div className="glass rounded-2xl px-5 py-12 text-center">
             <Icon
               name="file"
               className="mx-auto h-8 w-8 text-slate-400"
@@ -332,7 +376,7 @@ export default function AssignedComplaints() {
               return (
                 <article
                   key={complaint.id}
-                  className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6"
+                  className="glass rounded-2xl p-5 sm:p-6"
                 >
                   <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
                     <div className="min-w-0">
@@ -399,7 +443,7 @@ export default function AssignedComplaints() {
                         type="button"
                         disabled={submitting || Boolean(pendingEscalation)}
                         onClick={() => openEscalation(complaint)}
-                        className={`${primaryBtn} disabled:cursor-not-allowed disabled:opacity-50`}
+                        className="glass-btn-secondary inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {pendingEscalation
                           ? "Request pending"
@@ -426,7 +470,7 @@ export default function AssignedComplaints() {
                 type="button"
                 disabled={page <= 1}
                 onClick={() => setPage((value) => value - 1)}
-                className="rounded-lg border px-3 py-2 disabled:opacity-40"
+                className="glass-btn-secondary rounded-xl border border-slate-300 px-3 py-2 text-slate-700 disabled:opacity-40"
               >
                 Previous
               </button>
@@ -435,7 +479,7 @@ export default function AssignedComplaints() {
                 type="button"
                 disabled={page >= pagination.last_page}
                 onClick={() => setPage((value) => value + 1)}
-                className="rounded-lg border px-3 py-2 disabled:opacity-40"
+                className="glass-btn-secondary rounded-xl border border-slate-300 px-3 py-2 text-slate-700 disabled:opacity-40"
               >
                 Next
               </button>
@@ -446,7 +490,7 @@ export default function AssignedComplaints() {
         {/* Escalation Modal */}
         {selected && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm"
             onMouseDown={(event) =>
               event.target === event.currentTarget &&
               !submitting &&
@@ -457,7 +501,7 @@ export default function AssignedComplaints() {
               role="dialog"
               aria-modal="true"
               aria-labelledby="barangay-escalation-title"
-              className="w-full max-w-xl rounded-2xl bg-white shadow-2xl"
+              className="w-full max-w-xl rounded-3xl bg-white shadow-2xl"
             >
               <form onSubmit={submitEscalation}>
                 <div className="border-b border-slate-100 p-5">
@@ -519,7 +563,7 @@ export default function AssignedComplaints() {
                     type="button"
                     disabled={submitting}
                     onClick={() => setSelected(null)}
-                    className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700"
+                    className="glass-btn-secondary rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700"
                   >
                     Cancel
                   </button>
@@ -540,7 +584,7 @@ export default function AssignedComplaints() {
         {/* Resolution Modal */}
         {selectedResolution && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/50 p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/50 p-4 backdrop-blur-sm"
             onMouseDown={(event) =>
               event.target === event.currentTarget &&
               !submittingResolution &&
@@ -551,7 +595,7 @@ export default function AssignedComplaints() {
               role="dialog"
               aria-modal="true"
               aria-labelledby="barangay-resolution-title"
-              className="my-auto w-full max-w-xl rounded-2xl bg-white shadow-2xl"
+              className="my-auto w-full max-w-xl rounded-3xl bg-white shadow-2xl"
             >
               <form onSubmit={handleResolutionSubmit}>
                 <div className="border-b border-slate-100 p-5">
@@ -597,12 +641,44 @@ export default function AssignedComplaints() {
                     </span>
                   </label>
 
+                  <label className="block text-sm font-medium text-slate-700">
+                    Completion date <span className="text-red-600">*</span>
+                    <input type="date" required max={new Date().toISOString().slice(0, 10)} value={completedAt} onChange={(event) => setCompletedAt(event.target.value)} className={`${inputClass} mt-1`} />
+                  </label>
+
+                  <div>
+                    {[
+                      { key: "before", label: "Before photo", file: beforePhoto },
+                    ].map((photo) => (
+                      <label
+                        key={photo.key}
+                        htmlFor={`resolution-${photo.key}-photo`}
+                        className="block text-sm font-medium text-slate-700"
+                      >
+                        {photo.label} <span className="text-red-600">*</span>
+                        <input
+                          id={`resolution-${photo.key}-photo`}
+                          type="file"
+                          accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                          disabled={submittingResolution}
+                          onChange={(event) =>
+                            handleResolutionPhotoChange(event)
+                          }
+                          className={`${inputClass} mt-1`}
+                        />
+                        <span className="mt-1 block truncate text-xs font-normal text-slate-500">
+                          {photo.file?.name || "JPG, PNG, or WebP; up to 10 MB"}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+
                   <div>
                     <label
                       htmlFor="resolution-evidence"
                       className="block text-sm font-medium text-slate-700"
                     >
-                      Evidence attachments (optional)
+                      Evidence attachments <span className="text-red-600">*</span>
                     </label>
 
                     <input
@@ -615,11 +691,11 @@ export default function AssignedComplaints() {
                     />
 
                     <p className="mt-1 text-xs text-slate-500">
-                      Maximum 5 files. JPG, PNG, or PDF. Up to 10MB per file.
+                      At least 1 file is required. Maximum 5 files, JPG, PNG, or PDF, up to 10 MB each.
                     </p>
 
                     {evidenceFiles.length > 0 && (
-                      <div className="mt-3 space-y-2 rounded-lg bg-slate-50 p-3">
+                      <div className="mt-3 space-y-2 rounded-xl bg-slate-50 p-3">
                         <p className="text-xs font-semibold text-slate-700">
                           Selected evidence
                         </p>
@@ -646,7 +722,7 @@ export default function AssignedComplaints() {
                     type="button"
                     disabled={submittingResolution}
                     onClick={() => setSelectedResolution(null)}
-                    className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:opacity-50"
+                    className="glass-btn-secondary rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:opacity-50"
                   >
                     Cancel
                   </button>

@@ -3,8 +3,10 @@ import { Link } from "react-router-dom";
 import Swal from "sweetalert2";
 import CitizenLayout from "../../layouts/CitizenLayout";
 import { Icon, focusRing, inputClass, primaryBtn } from "../../components/ui";
+import PercentageBar from "../../components/PercentageBar";
 import {
   getEligibleFeedbackComplaints,
+  getMyFeedback,
   submitCitizenFeedback,
 } from "../../lib/api";
 
@@ -21,6 +23,8 @@ export default function Feedback() {
   const [hoverRating, setHoverRating] = useState(0); // UI only: star hover preview
   const [message, setMessage] = useState("");
   const [complaints, setComplaints] = useState([]);
+  const [myFeedback, setMyFeedback] = useState([]);
+  const [feedbackPage, setFeedbackPage] = useState({ current_page: 1, last_page: 1 });
   const [complaintId, setComplaintId] = useState("");
   const [loadingComplaints, setLoadingComplaints] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -43,6 +47,12 @@ export default function Feedback() {
     }
 
     void loadEligibleComplaints();
+    getMyFeedback()
+      .then((result) => {
+        setMyFeedback(result.data || []);
+        setFeedbackPage(result.pagination || { current_page: 1, last_page: 1 });
+      })
+      .catch(() => {});
   }, []);
 
   async function submit(event) {
@@ -61,7 +71,7 @@ export default function Feedback() {
     setSubmitting(true);
 
     try {
-      await submitCitizenFeedback(
+      const result = await submitCitizenFeedback(
         complaintId,
         rating,
         message.trim()
@@ -77,6 +87,11 @@ export default function Feedback() {
       setComplaints((current) =>
         current.filter((complaint) => complaint.id !== complaintId)
       );
+      setMyFeedback((current) => [{
+        ...result.feedback,
+        complaint: { title: selectedComplaint?.title || "Complaint feedback" },
+      }, ...current]);
+      setFeedbackPage((current) => ({ ...current, total: (current.total || 0) + 1 }));
 
       setComplaintId("");
       setRating(5);
@@ -112,19 +127,24 @@ export default function Feedback() {
             Back to dashboard
           </Link>
 
-          <h1 className="mt-4 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-            Citizen feedback
-          </h1>
+          <div className="mt-4 flex items-start gap-3">
+            <span className="mt-1 h-14 w-1 shrink-0 rounded-full bg-emerald-500" aria-hidden="true" />
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+                Citizen feedback
+              </h1>
 
-          <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">
-            Tell us how your resolved complaint was handled. Your answers go
-            straight to the municipality so they can improve their services.
-          </p>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">
+                Tell us how your resolved complaint was handled. Your answers go
+                straight to the municipality so they can improve their services.
+              </p>
+            </div>
+          </div>
         </div>
 
         <form
           onSubmit={submit}
-          className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+          className="glass overflow-hidden rounded-2xl"
         >
           {/* Accent bar */}
           <div className="h-1 bg-gradient-to-r from-emerald-800 via-emerald-600 to-teal-500" />
@@ -224,7 +244,7 @@ export default function Feedback() {
               )}
 
               {selectedComplaint && (
-                <div className="mt-3 flex items-center gap-3 rounded-lg border border-emerald-100 bg-emerald-50/60 px-4 py-3">
+                <div className="glass-soft mt-3 flex items-center gap-3 rounded-xl px-4 py-3">
                   <svg
                     viewBox="0 0 20 20"
                     fill="currentColor"
@@ -280,7 +300,7 @@ export default function Feedback() {
                         onBlur={() => setHoverRating(0)}
                         aria-pressed={rating === value}
                         aria-label={`${value} out of 5 – ${ratingLabels[value]}`}
-                        className={`rounded-lg p-1.5 transition-transform hover:scale-110 ${focusRing}`}
+                        className={`rounded-xl p-1.5 transition-transform hover:scale-110 ${focusRing}`}
                       >
                         <Icon
                           name="star"
@@ -337,11 +357,11 @@ export default function Feedback() {
                   className="h-1 flex-1 overflow-hidden rounded-full bg-slate-100"
                   aria-hidden="true"
                 >
-                  <div
-                    className={`h-full rounded-full transition-all ${
-                      charRatio > 0.9 ? "bg-amber-500" : "bg-emerald-600"
-                    }`}
-                    style={{ width: `${Math.min(charRatio * 100, 100)}%` }}
+                  <PercentageBar
+                    percentage={Math.min(charRatio * 100, 100)}
+                    fillClassName={`${
+                      charRatio > 0.9 ? "text-amber-500" : "text-emerald-600"
+                    } transition-all`}
                   />
                 </div>
                 <p className="text-xs tabular-nums text-slate-500">
@@ -352,7 +372,7 @@ export default function Feedback() {
           </div>
 
           {/* Footer */}
-          <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50/60 px-6 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8">
+          <div className="flex flex-col-reverse gap-3 border-t border-slate-100 px-6 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8">
             <p className="text-xs leading-5 text-slate-500">
               Your feedback is shared with the municipality to improve
               services.
@@ -367,6 +387,34 @@ export default function Feedback() {
             </button>
           </div>
         </form>
+
+        <section className="glass rounded-2xl p-6 sm:p-8" aria-labelledby="my-feedback-title">
+          <h2 id="my-feedback-title" className="text-lg font-semibold text-slate-900">My submitted feedback</h2>
+          <p className="mt-1 text-sm text-slate-500">Only your own ratings and comments are shown here.</p>
+          {myFeedback.length ? (
+            <ul className="mt-5 divide-y divide-slate-100">
+              {myFeedback.map((item) => (
+                <li key={item.id} className="py-4 first:pt-0 last:pb-0">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-slate-900">{item.complaint?.title || "Complaint feedback"}</p>
+                    <span className="text-sm font-semibold text-amber-700">{item.rating}/5 ★</span>
+                  </div>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{item.comment}</p>
+                  <p className="mt-2 text-xs text-slate-400">{item.created_at ? new Date(item.created_at).toLocaleDateString("en-PH", { dateStyle: "medium" }) : "Just submitted"}</p>
+                </li>
+              ))}
+            </ul>
+          ) : <p className="mt-5 text-sm text-slate-500">You have not submitted feedback yet.</p>}
+          {feedbackPage.last_page > 1 && (
+            <div className="mt-5 flex items-center justify-between border-t border-slate-100 pt-4">
+              <span className="text-sm text-slate-500">Page {feedbackPage.current_page} of {feedbackPage.last_page}</span>
+              <div className="flex gap-2">
+                <button type="button" disabled={feedbackPage.current_page <= 1} onClick={() => getMyFeedback(feedbackPage.current_page - 1).then((result) => { setMyFeedback(result.data || []); setFeedbackPage(result.pagination); })} className="glass-btn-secondary rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 disabled:opacity-50">Previous</button>
+                <button type="button" disabled={feedbackPage.current_page >= feedbackPage.last_page} onClick={() => getMyFeedback(feedbackPage.current_page + 1).then((result) => { setMyFeedback(result.data || []); setFeedbackPage(result.pagination); })} className="glass-btn-secondary rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 disabled:opacity-50">Next</button>
+              </div>
+            </div>
+          )}
+        </section>
       </div>
     </CitizenLayout>
   );

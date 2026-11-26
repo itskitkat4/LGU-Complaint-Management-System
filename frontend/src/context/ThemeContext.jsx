@@ -120,24 +120,20 @@ export function ThemeToggle() {
             title={label}
             onClick={context.toggleTheme}
             className={[
-                "group relative inline-flex h-9 w-[4.5rem] shrink-0 items-center rounded-full border p-1",
-                "transition-colors duration-300 motion-reduce:transition-none",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2",
-                "focus-visible:ring-offset-white dark:focus-visible:ring-teal-400 dark:focus-visible:ring-offset-slate-950",
-                "border-sky-200 bg-sky-100 hover:bg-sky-200/70",
-                "dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700/80",
+                "glass-btn-secondary group relative inline-flex h-9 w-[4.5rem] shrink-0 items-center rounded-full border border-slate-300 p-1",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2",
             ].join(" ")}
         >
-            <SunIcon className="absolute left-2.5 h-4 w-4 text-sky-700/60 dark:text-slate-400" />
-            <MoonIcon className="absolute right-2.5 h-4 w-4 text-sky-700/60 dark:text-slate-400" />
+            <SunIcon className="absolute left-2.5 h-4 w-4 text-slate-500" />
+            <MoonIcon className="absolute right-2.5 h-4 w-4 text-slate-500" />
 
             <span
                 className={[
-                    "relative z-10 grid h-7 w-7 place-items-center rounded-full shadow-md",
+                    "relative z-10 grid h-7 w-7 place-items-center rounded-full",
                     "transition-all duration-300 ease-out motion-reduce:transition-none",
                     isDark
-                        ? "translate-x-[2.125rem] bg-teal-300 text-slate-900"
-                        : "translate-x-0 bg-amber-400 text-amber-950",
+                        ? "glass-icon translate-x-[2.125rem]"
+                        : "translate-x-0 bg-amber-400 text-amber-950 shadow-md",
                 ].join(" ")}
             >
                 {isDark ? (

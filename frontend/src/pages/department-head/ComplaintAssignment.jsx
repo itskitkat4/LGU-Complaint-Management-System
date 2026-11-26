@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import Swal from "sweetalert2";
 import StaffLayout from "../../layouts/StaffLayout";
@@ -152,13 +151,16 @@ export default function ComplaintAssignment() {
   return (
     <StaffLayout title="Complaint Assignment" role="Department Head">
       <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-            Complaint assignment
-          </h2>
-          <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">
-            Select qualified department personnel for each LGU-level complaint.
-          </p>
+        <div className="flex items-start gap-3">
+          <span className="mt-1 h-14 w-1 shrink-0 rounded-full bg-emerald-500" aria-hidden="true" />
+          <div>
+            <h2 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+              Complaint assignment
+            </h2>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">
+              Select qualified department personnel for each LGU-level complaint.
+            </p>
+          </div>
         </div>
 
         {loading && (
@@ -166,7 +168,7 @@ export default function ComplaintAssignment() {
             {[1, 2].map((item) => (
               <div
                 key={item}
-                className="animate-pulse rounded-xl border border-slate-200 bg-white p-6"
+                className="glass animate-pulse rounded-2xl p-6"
               >
                 <div className="h-4 w-32 rounded bg-slate-200" />
                 <div className="mt-3 h-5 w-64 rounded bg-slate-200" />
@@ -177,7 +179,7 @@ export default function ComplaintAssignment() {
         )}
 
         {!loading && error && (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-5">
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-5">
             <p className="text-sm font-medium text-red-700">{error}</p>
             <button
               type="button"
@@ -194,7 +196,7 @@ export default function ComplaintAssignment() {
             {complaints.map((complaint) => (
               <article
                 key={complaint.id}
-                className="rounded-xl border border-slate-200 bg-white"
+                className="glass rounded-2xl"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-6 py-5">
                   <div>
@@ -246,7 +248,7 @@ export default function ComplaintAssignment() {
               role="dialog"
               aria-modal="true"
               aria-labelledby="assign-complaint-title"
-              className="my-auto w-full max-w-xl rounded-2xl border border-slate-200 bg-white shadow-2xl"
+              className="my-auto w-full max-w-xl rounded-3xl border border-slate-200 bg-white shadow-2xl"
             >
               <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-5 sm:px-6">
                 <div>
@@ -267,7 +269,7 @@ export default function ComplaintAssignment() {
                   type="button"
                   onClick={closeAssignModal}
                   disabled={submittingId !== null}
-                  className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50"
+                  className="rounded-xl p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50"
                   aria-label="Close assignment dialog"
                 >
                   <Icon name="x" className="h-5 w-5" />
@@ -335,7 +337,7 @@ export default function ComplaintAssignment() {
                     type="button"
                     onClick={closeAssignModal}
                     disabled={submittingId !== null}
-                    className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    className="glass-btn-secondary rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:opacity-50"
                   >
                     Cancel
                   </button>
@@ -356,7 +358,7 @@ export default function ComplaintAssignment() {
         )}
 
         {!loading && !error && complaints.length === 0 && (
-          <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50/60 px-5 py-10 text-center">
+          <div className="glass rounded-2xl px-5 py-10 text-center">
             <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-white text-slate-500 ring-1 ring-slate-200">
               <Icon name="check" className="h-6 w-6" />
             </span>
@@ -382,7 +384,7 @@ export default function ComplaintAssignment() {
                 type="button"
                 onClick={() => setPage((current) => current - 1)}
                 disabled={pagination.current_page <= 1}
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                className="glass-btn-secondary rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Previous
               </button>
@@ -391,7 +393,7 @@ export default function ComplaintAssignment() {
                 type="button"
                 onClick={() => setPage((current) => current + 1)}
                 disabled={pagination.current_page >= pagination.last_page}
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                className="glass-btn-secondary rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Next
               </button>

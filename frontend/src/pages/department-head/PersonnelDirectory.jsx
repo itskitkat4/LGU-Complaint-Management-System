@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import StaffLayout from "../../layouts/StaffLayout";
 import { Icon } from "../../components/ui";
 import { getDepartmentPersonnel } from "../../lib/api";
+import { ContentSkeleton } from "../../components/Skeletons";
 
 export default function PersonnelDirectory() {
   const [personnel, setPersonnel] = useState([]);
@@ -31,23 +32,26 @@ export default function PersonnelDirectory() {
   return (
     <StaffLayout title="Personnel Directory" role="Department Head">
       <div className="space-y-6">
-        <header>
-          <p className="text-sm font-medium text-emerald-700">Department Portal</p>
-          <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Department Personnel</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">View and search active personnel assigned to your department.</p>
+        <header className="flex items-start gap-3">
+          <span className="mt-1 h-16 w-1 shrink-0 rounded-full bg-emerald-500" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium text-emerald-700">Department Portal</p>
+            <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Department Personnel</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">View and search active personnel assigned to your department.</p>
+          </div>
         </header>
 
-        <section className="rounded-xl border border-slate-200 bg-white">
+        <section className="glass overflow-hidden rounded-2xl">
           <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
             <div>
               <h3 className="font-semibold text-slate-900">Personnel directory</h3>
               <p className="mt-1 text-sm text-slate-500">{personnel.length} active {personnel.length === 1 ? "person" : "people"}</p>
             </div>
-            <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name or email" aria-label="Search department personnel" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-100 sm:max-w-xs" />
+            <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name or email" aria-label="Search department personnel" className="glass-input w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-100 sm:max-w-xs" />
           </div>
 
           {loading ? (
-            <p role="status" className="p-6 text-sm text-slate-500">Loading department personnel…</p>
+            <ContentSkeleton label="Loading department personnel" variant="table" rows={4} className="p-4" />
           ) : error ? (
             <p role="alert" className="p-6 text-sm text-red-700">{error}</p>
           ) : visiblePersonnel.length === 0 ? (
@@ -59,8 +63,8 @@ export default function PersonnelDirectory() {
           ) : (
             <ul className="divide-y divide-slate-100">
               {visiblePersonnel.map((person) => (
-                <li key={person.id} className="flex items-center gap-3 p-4 sm:p-5">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-50 font-semibold text-emerald-800">{person.full_name?.charAt(0)?.toUpperCase() || "P"}</span>
+                <li key={person.id} className="glass-hover flex items-center gap-3 p-4 sm:p-5">
+                  <span className="glass-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-semibold">{person.full_name?.charAt(0)?.toUpperCase() || "P"}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-semibold text-slate-900">{person.full_name}</span>
                     <span className="block truncate text-sm text-slate-500">{person.email}</span>

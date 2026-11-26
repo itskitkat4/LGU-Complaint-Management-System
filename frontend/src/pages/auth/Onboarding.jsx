@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -15,10 +14,10 @@ const focusRing =
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2";
 
 const inputClass =
-    "block min-h-12 w-full rounded-md border border-slate-300 bg-white px-3.5 py-3 text-sm text-slate-900 shadow-sm outline-none transition hover:border-slate-400 focus:border-emerald-700 focus:ring-4 focus:ring-emerald-700/10 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500";
+    "block min-h-12 w-full rounded-xl border border-slate-300 bg-white/90 px-3.5 py-3 text-sm text-slate-900 shadow-sm outline-none backdrop-blur-md transition hover:border-slate-400 focus:border-emerald-700 focus:ring-4 focus:ring-emerald-700/10 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500";
 
 const readOnlyClass =
-    "block min-h-12 w-full cursor-default rounded-md border border-slate-200 bg-slate-50 px-3.5 py-3 pr-10 text-sm text-slate-700 outline-none placeholder:text-slate-400";
+    "block min-h-12 w-full cursor-default rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 pr-10 text-sm text-slate-700 outline-none placeholder:text-slate-400";
 
 const steps = [
     { label: "Sign in with Google", done: true },
@@ -250,9 +249,21 @@ function Onboarding() {
     */
 
     return (
-        <div className="grid min-h-screen bg-white font-sans text-slate-900 antialiased lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
+        <div className="app-bg grid min-h-screen font-sans text-slate-900 antialiased lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
             {/* Brand panel */}
             <aside className="relative hidden flex-col justify-between overflow-hidden bg-emerald-950 p-12 text-white lg:flex xl:p-16">
+                {/* Municipal hall photo with a deep green wash */}
+                <img
+                    src="/tagoloan-hall.jpg"
+                    alt=""
+                    aria-hidden="true"
+                    className="absolute inset-0 h-full w-full object-cover object-[50%_40%]"
+                />
+                <div
+                    aria-hidden="true"
+                    className="absolute inset-0 bg-gradient-to-br from-emerald-950/90 via-emerald-900/80 to-emerald-700/60"
+                />
+
                 <div
                     aria-hidden="true"
                     className="pointer-events-none absolute -right-32 -bottom-32 h-[28rem] w-[28rem] rounded-full border border-white/10"
@@ -287,38 +298,40 @@ function Onboarding() {
                         One last step before you start.
                     </h2>
 
-                    <p className="mt-4 text-base leading-7 text-emerald-100/80">
+                    <p className="mt-4 text-base leading-7 text-emerald-100/90">
                         Select your barangay of residence to complete your
                         citizen account setup.
                     </p>
 
-                    <ol className="mt-9 space-y-4">
-                        {steps.map((step, index) => (
-                            <li
-                                key={step.label}
-                                className={`flex items-center gap-3 text-sm leading-6 ${
-                                    step.done
-                                        ? "text-emerald-50"
-                                        : "text-emerald-100/70"
-                                }`}
-                            >
-                                <span
-                                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                    <div className="mt-8 rounded-3xl border border-white/20 bg-white/10 p-6 backdrop-blur-xl">
+                        <ol className="space-y-4">
+                            {steps.map((step, index) => (
+                                <li
+                                    key={step.label}
+                                    className={`flex items-center gap-3 text-sm leading-6 ${
                                         step.done
-                                            ? "bg-emerald-400/20 text-emerald-300"
-                                            : "border border-white/20 text-emerald-100/70"
+                                            ? "text-emerald-50"
+                                            : "text-emerald-100/80"
                                     }`}
                                 >
-                                    {step.done ? <Check /> : index + 1}
-                                </span>
+                                    <span
+                                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                                            step.done
+                                                ? "bg-emerald-400/20 text-emerald-300"
+                                                : "border border-white/30 text-emerald-100/80"
+                                        }`}
+                                    >
+                                        {step.done ? <Check /> : index + 1}
+                                    </span>
 
-                                {step.label}
-                            </li>
-                        ))}
-                    </ol>
+                                    {step.label}
+                                </li>
+                            ))}
+                        </ol>
+                    </div>
                 </div>
 
-                <p className="relative text-xs text-emerald-100/60">
+                <p className="relative text-xs text-emerald-100/70">
                     Municipality of Tagoloan
                 </p>
             </aside>
@@ -328,7 +341,7 @@ function Onboarding() {
                 <header className="flex items-center justify-between gap-4 px-6 py-5 sm:px-10">
                     <Link
                         to="/"
-                        className={`flex items-center gap-2.5 rounded-md lg:invisible ${focusRing}`}
+                        className={`flex items-center gap-2.5 rounded-full lg:invisible ${focusRing}`}
                         aria-label="BantaySerbisyo home"
                     >
                         <img
@@ -347,7 +360,7 @@ function Onboarding() {
 
                     <Link
                         to="/"
-                        className={`rounded-md px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 ${focusRing}`}
+                        className={`glass-btn-secondary rounded-full px-5 py-2.5 text-sm font-medium text-slate-700 ${focusRing}`}
                     >
                         Back to home
                     </Link>
@@ -355,7 +368,10 @@ function Onboarding() {
 
                 <main className="flex flex-1 items-center justify-center px-6 pt-4 pb-12 sm:px-10">
                     {loading ? (
-                        <div role="status" className="w-full max-w-md">
+                        <div
+                            role="status"
+                            className="glass w-full max-w-md rounded-3xl p-6 sm:p-8"
+                        >
                             <span className="sr-only">
                                 Loading your profile…
                             </span>
@@ -365,7 +381,7 @@ function Onboarding() {
                                 <Skeleton className="mt-3 h-4 w-full rounded" />
                                 <Skeleton className="mt-2 h-4 w-3/4 rounded" />
 
-                                <div className="mt-8 flex items-center gap-3 rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
+                                <div className="glass-soft mt-8 flex items-center gap-3 rounded-2xl px-4 py-3">
                                     <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
 
                                     <div className="min-w-0 flex-1 space-y-2">
@@ -384,11 +400,11 @@ function Onboarding() {
                                     {Array.from({ length: 3 }).map((_, index) => (
                                         <div key={index}>
                                             <Skeleton className="mb-2 h-4 w-28 rounded" />
-                                            <Skeleton className="h-12 w-full rounded-md" />
+                                            <Skeleton className="h-12 w-full rounded-xl" />
                                         </div>
                                     ))}
 
-                                    <Skeleton className="h-12 w-full rounded-md" />
+                                    <Skeleton className="h-12 w-full rounded-full" />
                                 </div>
 
                                 <Skeleton className="mx-auto mt-8 h-3 w-4/5 rounded" />
@@ -396,7 +412,7 @@ function Onboarding() {
                         </div>
                     ) : (
                         <section
-                            className="w-full max-w-md"
+                            className="glass w-full max-w-md rounded-3xl p-6 sm:p-8"
                             aria-labelledby="onboarding-title"
                         >
                             <h1
@@ -412,8 +428,8 @@ function Onboarding() {
                             </p>
 
                             {/* Signed-in account */}
-                            <div className="mt-8 flex items-center gap-3 rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
-                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-sm font-semibold text-emerald-900">
+                            <div className="glass-soft mt-8 flex items-center gap-3 rounded-2xl px-4 py-3">
+                                <span className="glass-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold">
                                     {initial}
                                 </span>
 
@@ -437,7 +453,7 @@ function Onboarding() {
                             {error && (
                                 <div
                                     role="alert"
-                                    className="mb-5 flex items-start gap-3 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-800"
+                                    className="mb-5 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-800"
                                 >
                                     <svg
                                         viewBox="0 0 24 24"
@@ -460,7 +476,7 @@ function Onboarding() {
                                         type="button"
                                         onClick={() => setError("")}
                                         aria-label="Dismiss message"
-                                        className={`-mr-1 rounded p-0.5 opacity-60 transition-opacity hover:opacity-100 ${focusRing}`}
+                                        className={`-mr-1 rounded-full p-0.5 opacity-60 transition-opacity hover:opacity-100 ${focusRing}`}
                                     >
                                         <svg
                                             viewBox="0 0 24 24"
@@ -543,7 +559,7 @@ function Onboarding() {
                                 <button
                                     type="submit"
                                     disabled={!barangayId || saving}
-                                    className={`flex min-h-12 w-full items-center justify-center rounded-md bg-emerald-800 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-900 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500 disabled:shadow-none ${focusRing}`}
+                                    className={`glass-btn-primary flex min-h-12 w-full items-center justify-center rounded-full text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`}
                                 >
                                     {saving
                                         ? "Saving profile..."
@@ -559,7 +575,7 @@ function Onboarding() {
                     )}
                 </main>
 
-                <footer className="px-6 py-6 text-center text-xs text-slate-500 sm:px-10">
+                <footer className="px-6 py-6 text-center text-xs text-slate-600 sm:px-10">
                     © {new Date().getFullYear()} BantaySerbisyo ·
                     Municipality of Tagoloan
                 </footer>

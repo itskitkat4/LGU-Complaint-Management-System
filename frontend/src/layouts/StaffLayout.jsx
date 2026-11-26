@@ -1,5 +1,6 @@
 import { NavLink, Link, useNavigate } from "react-router-dom";
 import { ThemeToggle } from "../context/ThemeContext";
+import NotificationBell from "../components/NotificationBell";
 import { confirmAndSignOut } from "../lib/signOut";
 
 const navigationByRole = {
@@ -10,14 +11,18 @@ const navigationByRole = {
     { label: "Escalation Requests", to: "/staff/escalations", icon: "inbox" },
     { label: "Resolution Review", to: "/staff/resolutions", icon: "file" },
     { label: "Reports & Analytics", to: "/staff/reports", icon: "chart" },
+    { label: "Service Feedback", to: "/staff/feedback", icon: "message" },
   ],
   "Barangay Head": [
     { label: "Dashboard", to: "/barangay/dashboard", icon: "grid" },
     { label: "Assigned Complaints", to: "/barangay/complaints", icon: "file" },
+    { label: "Complaint History", to: "/barangay/complaints/history", icon: "history" },
+    { label: "Service Feedback", to: "/barangay/feedback", icon: "message" },
   ],
   "Department Head": [
     { label: "Dashboard", to: "/department/dashboard", icon: "grid" },
     { label: "Department Monitoring", to: "/department/monitoring", icon: "chart" },
+    { label: "Service Feedback", to: "/department/feedback", icon: "message" },
     { label: "Personnel Directory", to: "/department/personnel", icon: "users" },
     {
       label: "Personnel Assignments",
@@ -68,6 +73,15 @@ function Icon({ name, className = "h-5 w-5" }) {
         <path d="M4 12h4l2 3h4l2-3h4" />
       </>
     ),
+    bell: (
+      <>
+        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+        <path d="M10 21h4" />
+      </>
+    ),
+    message: (
+      <path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5Z" />
+    ),
     history: (
       <>
         <path d="M3 12a9 9 0 1 0 2.64-6.36L3 8" />
@@ -107,7 +121,7 @@ function Icon({ name, className = "h-5 w-5" }) {
 function Logo({ subtitle }) {
   return (
     <span className="flex items-center gap-3">
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-800 text-white">
+      <span className="glass-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
         <Icon name="shield" className="h-5 w-5" />
       </span>
 
@@ -118,7 +132,6 @@ function Logo({ subtitle }) {
             Serbisyo
           </span>
         </span>
-
         <span className="block truncate text-xs text-slate-500">
           {subtitle}
         </span>
@@ -133,12 +146,16 @@ function SidebarLink({ link }) {
   return (
     <NavLink
       to={link.to}
-      end={isDashboard || link.to === "/staff/complaints"}
+      end={
+        isDashboard ||
+        link.to === "/staff/complaints" ||
+        link.to === "/barangay/complaints"
+      }
       className={({ isActive }) =>
-        `flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors ${focusRing} ${
+        `flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium ${focusRing} ${
           isActive
-            ? "bg-emerald-50 text-emerald-900"
-            : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+            ? "glass-active text-emerald-900"
+            : "glass-hover text-slate-600 hover:text-slate-900"
         }`
       }
     >
@@ -153,7 +170,7 @@ function SidebarLink({ link }) {
 
 export default function StaffLayout({
   children,
-  title = "Staff Portal",
+  title = "Complaint Queue",
   role = "LGU Staff",
   links: customLinks,
 }) {
@@ -166,13 +183,13 @@ export default function StaffLayout({
 
   return (
 <div
-  className={`min-h-screen bg-slate-50 font-sans text-slate-900 antialiased ${
+  className={`app-bg min-h-screen font-sans text-slate-900 antialiased ${
     isReportsPage ? "reports-print-layout" : ""
   }`}
 >      <div className="flex min-h-screen">
 
         {/* Desktop Sidebar */}
-        <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-slate-200 bg-white lg:flex">
+        <aside className="glass sticky top-4 m-4 hidden h-[calc(100vh-2rem)] w-64 shrink-0 flex-col rounded-3xl lg:flex">
 
           {/* Logo */}
           <Link
@@ -184,7 +201,7 @@ export default function StaffLayout({
           </Link>
 
           {/* Main Menu */}
-          <div className="px-5 pb-3 pt-4">
+          <div className="px-6 pb-3 pt-3">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
               Main Menu
             </p>
@@ -192,7 +209,7 @@ export default function StaffLayout({
 
           <nav
             aria-label="Main menu"
-            className="flex-1 space-y-1 px-4"
+            className="flex-1 space-y-1 overflow-y-auto px-4"
           >
             {links.map((link) => (
               <SidebarLink key={link.to} link={link} />
@@ -200,23 +217,25 @@ export default function StaffLayout({
           </nav>
 
           {/* Sign Out - Bottom of Sidebar */}
-          <div className="mt-auto border-t border-slate-100 p-4">
-            <button
-              type="button"
-              onClick={handleSignOut}
-              className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-slate-600 transition-colors hover:bg-red-50 hover:text-red-700 ${focusRing}`}
-            >
-              <Icon name="logout" className="h-[18px] w-[18px]" />
-              Sign out
-            </button>
+          <div className="mt-auto p-3">
+            <div className="glass-soft rounded-2xl p-2">
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 transition-colors hover:bg-red-50 hover:text-red-700 ${focusRing}`}
+              >
+                <Icon name="logout" className="h-[18px] w-[18px]" />
+                Sign out
+              </button>
+            </div>
           </div>
         </aside>
 
         {/* Main Content */}
-        <div className="flex min-w-0 flex-1 flex-col pb-20 lg:pb-0">
+        <div className="flex min-w-0 flex-1 flex-col pb-24 lg:pb-0">
 
           {/* Topbar */}
-          <header className="sticky top-0 z-20 flex min-h-16 items-center border-b border-slate-200 bg-white/95 px-5 backdrop-blur sm:px-8">
+          <header className="sticky top-0 z-20 flex min-h-16 items-center px-5 py-3 sm:px-8">
 
             {/* Mobile Logo */}
             <Link
@@ -228,21 +247,22 @@ export default function StaffLayout({
             </Link>
 
             {/* Desktop Page Title */}
-            <div className="hidden lg:block">
-              <p className="text-xs font-medium text-slate-500">
+            <div className="glass hidden rounded-full px-5 py-1.5 lg:block">
+              <p className="text-xs font-medium leading-4 text-slate-500">
                 {role}
               </p>
 
-              <h1 className="text-base font-semibold text-slate-900">
+              <h1 className="text-sm font-semibold leading-5 text-slate-900">
                 {title}
               </h1>
             </div>
             <div className="ml-auto flex items-center gap-2">
+              <NotificationBell />
               <ThemeToggle />
               <button
                 type="button"
                 onClick={handleSignOut}
-                className={`inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 lg:hidden ${focusRing}`}
+                className={`glass-btn-secondary inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 lg:hidden ${focusRing}`}
                 aria-label="Sign out"
               >
                 <Icon name="logout" className="h-4 w-4" />
@@ -253,7 +273,7 @@ export default function StaffLayout({
           </header>
 
           {/* Page Content */}
-          <main className="mx-auto w-full max-w-6xl flex-1 p-5 sm:p-8">
+          <main className="mx-auto w-full max-w-7xl flex-1 px-5 pb-5 pt-2 sm:px-8 sm:pb-8">
 
             {/* Mobile Page Title */}
             <h1 className="mb-8 text-2xl font-bold tracking-tight text-slate-900 lg:hidden">
@@ -263,8 +283,10 @@ export default function StaffLayout({
             {children}
 
             {/* Footer */}
-            <footer className="mt-10 border-t border-slate-200 py-5 text-center text-xs text-slate-500">
-              © {new Date().getFullYear()} BantaySerbisyo · Municipality of Tagoloan
+            <footer className="mt-10 flex items-center gap-4 py-5 text-xs text-slate-500">
+              <span className="h-px flex-1 bg-slate-400/30" aria-hidden="true" />
+              <span>© {new Date().getFullYear()} BantaySerbisyo · Municipality of Tagoloan</span>
+              <span className="h-px flex-1 bg-slate-400/30" aria-hidden="true" />
             </footer>
           </main>
         </div>
@@ -273,7 +295,7 @@ export default function StaffLayout({
       {/* Mobile / Tablet Bottom Navigation */}
       <nav
         aria-label="Mobile main menu"
-        className="fixed inset-x-0 bottom-0 z-30 flex border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
+        className="glass fixed inset-x-3 bottom-3 z-30 flex rounded-2xl p-1 pb-[env(safe-area-inset-bottom)] lg:hidden"
       >
         {links.map((link) => (
           <NavLink
@@ -281,9 +303,9 @@ export default function StaffLayout({
             to={link.to}
             end={isDashboard(link.to) || link.to === "/staff/complaints"}
             className={({ isActive }) =>
-              `flex min-w-0 flex-1 flex-col items-center gap-1 px-2 py-2.5 text-xs font-medium transition-colors ${focusRing} focus-visible:ring-inset ${
+              `flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl px-2 py-2.5 text-xs font-medium ${focusRing} focus-visible:ring-inset ${
                 isActive
-                  ? "text-emerald-800"
+                  ? "glass-active text-emerald-800"
                   : "text-slate-500 hover:text-slate-900"
               }`
             }

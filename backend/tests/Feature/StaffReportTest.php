@@ -141,6 +141,7 @@ class StaffReportTest extends TestCase
             '*' => Http::response([
                 'id' => $id,
                 'email' => $email,
+                'app_metadata' => ['bantayserbisyo_password_setup_completed' => true],
             ], 200),
         ]);
     }
@@ -176,7 +177,7 @@ class StaffReportTest extends TestCase
     {
         $this->authenticateAs($this->citizenId, 'citizen@example.com');
 
-        $response = $this->withToken('fake-citizen-token')
+        $response = $this->withToken($this->syntheticSupabaseToken($this->citizenId, ['password']))
             ->getJson('/api/staff/reports/summary');
 
         $response->assertForbidden();
@@ -242,7 +243,7 @@ class StaffReportTest extends TestCase
             'updated_at' => '2026-10-21 10:00:00',
         ]);
 
-        $response = $this->withToken('fake-staff-token')
+        $response = $this->withToken($this->syntheticSupabaseToken($this->staffId, ['password']))
             ->getJson('/api/staff/reports/summary');
 
         $response->assertOk()
@@ -305,7 +306,7 @@ class StaffReportTest extends TestCase
         );
 
         // Generate the report.
-        $response = $this->withToken('fake-staff-token')
+        $response = $this->withToken($this->syntheticSupabaseToken($this->staffId, ['password']))
             ->postJson('/api/staff/reports', [
                 'date_from' => '2026-07-01',
                 'date_to' => '2026-10-31'

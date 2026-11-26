@@ -1,6 +1,6 @@
-
 import { useCallback, useEffect, useState } from "react";
 import StaffLayout from "../../layouts/StaffLayout";
+import { ContentSkeleton } from "../../components/Skeletons";
 import {
   Icon,
   focusRing,
@@ -32,7 +32,7 @@ function getFullName(profile) {
 
 function InfoItem({ label, value }) {
   return (
-    <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+    <div className="glass-soft rounded-xl p-3">
       <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
         {label}
       </p>
@@ -44,16 +44,7 @@ function InfoItem({ label, value }) {
 }
 
 function LoadingSkeleton() {
-  return (
-    <div className="animate-pulse space-y-4">
-      {[1, 2, 3].map((item) => (
-        <div
-          key={item}
-          className="h-32 rounded-xl border border-slate-200 bg-slate-100"
-        />
-      ))}
-    </div>
-  );
+  return <ContentSkeleton label="Loading submitted resolutions" variant="list" rows={3} />;
 }
 
 export default function ResolutionQueue() {
@@ -114,6 +105,9 @@ export default function ResolutionQueue() {
     setActionSuccess("");
     setAttachmentUrls({});
     setAttachmentLoading({});
+    resolution.attachments
+      ?.filter((attachment) => attachment.evidence_type === "before")
+      .forEach((attachment) => void openEvidence(attachment));
   }
 
   function closeReview() {
@@ -216,31 +210,34 @@ export default function ResolutionQueue() {
 
         {/* Page heading */}
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium text-emerald-800">
-              LGU Staff
-            </p>
-            <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
-              Resolution Review
-            </h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Review submitted resolutions and decide whether to approve or return them.
-            </p>
+          <div className="flex items-start gap-3">
+            <span className="mt-1 h-16 w-1 shrink-0 rounded-full bg-emerald-500" aria-hidden="true" />
+            <div>
+              <p className="text-sm font-medium text-emerald-800">
+                LGU Staff
+              </p>
+              <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
+                Resolution Review
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Review submitted resolutions and decide whether to approve or return them.
+              </p>
+            </div>
           </div>
 
           <button
             type="button"
             onClick={() => loadResolutions(page)}
             disabled={loading}
-            className={`inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 ${focusRing}`}
+            className={`glass-btn-secondary inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:opacity-50 ${focusRing}`}
           >
-            <Icon name="refresh" className="h-4 w-4" />
+            <Icon name="refresh-cw" className="h-4 w-4" />
             Refresh
           </button>
         </div>
 
         {/* Summary */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="glass rounded-2xl p-5">
           <p className="text-sm font-medium text-slate-500">
             Pending resolutions
           </p>
@@ -256,7 +253,7 @@ export default function ResolutionQueue() {
         {actionSuccess && (
           <div
             role="status"
-            className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800"
+            className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800"
           >
             {actionSuccess}
           </div>
@@ -265,7 +262,7 @@ export default function ResolutionQueue() {
         {error && (
           <div
             role="alert"
-            className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+            className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
           >
             {error}
             <button
@@ -282,7 +279,7 @@ export default function ResolutionQueue() {
         {loading ? (
           <LoadingSkeleton />
         ) : !error && resolutions.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center">
+          <div className="glass rounded-2xl px-6 py-14 text-center">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-500">
               <Icon name="check" className="h-6 w-6" />
             </div>
@@ -301,7 +298,7 @@ export default function ResolutionQueue() {
               return (
                 <article
                   key={resolution.id}
-                  className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
+                  className="glass overflow-hidden rounded-2xl"
                 >
                   <div className="p-5">
                     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -334,6 +331,10 @@ export default function ResolutionQueue() {
                       <InfoItem
                         label="Barangay"
                         value={itemComplaint?.barangay?.name}
+                      />
+                      <InfoItem
+                        label="Completion date"
+                        value={resolution.completed_at?.slice(0, 10)}
                       />
                     </div>
 
@@ -369,7 +370,7 @@ export default function ResolutionQueue() {
 
         {/* Pagination */}
         {!loading && pagination.last_page > 1 && (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4">
+          <div className="glass flex flex-wrap items-center justify-between gap-3 rounded-2xl p-4">
             <p className="text-sm text-slate-500">
               Page {pagination.current_page} of {pagination.last_page}
             </p>
@@ -379,7 +380,7 @@ export default function ResolutionQueue() {
                 type="button"
                 onClick={() => setPage((current) => Math.max(1, current - 1))}
                 disabled={page <= 1}
-                className={`rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 ${focusRing}`}
+                className={`glass-btn-secondary rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-40 ${focusRing}`}
               >
                 Previous
               </button>
@@ -392,7 +393,7 @@ export default function ResolutionQueue() {
                   )
                 }
                 disabled={page >= pagination.last_page}
-                className={`rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 ${focusRing}`}
+                className={`glass-btn-secondary rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-40 ${focusRing}`}
               >
                 Next
               </button>
@@ -413,7 +414,7 @@ export default function ResolutionQueue() {
             role="dialog"
             aria-modal="true"
             aria-label="Review submitted resolution"
-            className="my-auto max-h-[94vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-2xl"
+            className="my-auto max-h-[94vh] w-full max-w-3xl overflow-y-auto rounded-3xl bg-white shadow-2xl"
           >
             {/* Modal header */}
             <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-6 py-5">
@@ -434,7 +435,7 @@ export default function ResolutionQueue() {
                 onClick={closeReview}
                 disabled={actionLoading}
                 aria-label="Close review"
-                className={`rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50 ${focusRing}`}
+                className={`rounded-xl p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50 ${focusRing}`}
               >
                 <Icon name="close" className="h-5 w-5" />
               </button>
@@ -467,7 +468,7 @@ export default function ResolutionQueue() {
                   />
                 </div>
 
-                <div className="mt-3 rounded-xl border border-slate-200 p-4">
+                <div className="mt-3 rounded-2xl border border-slate-200 p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Citizen's description
                   </p>
@@ -483,7 +484,7 @@ export default function ResolutionQueue() {
                   Submitted Resolution
                 </h3>
 
-                <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50/50 p-4">
+                <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">
                     Resolution Description
                   </p>
@@ -501,7 +502,30 @@ export default function ResolutionQueue() {
                     label="Submitted at"
                     value={formatDate(selectedResolution.submitted_at)}
                   />
+                  <InfoItem
+                    label="Completion date"
+                    value={selectedResolution.completed_at?.slice(0, 10)}
+                  />
                 </div>
+                {complaint?.resolutions?.filter((item) => item.id !== selectedResolution.id).length > 0 && (
+                  <div className="mt-4 rounded-xl border border-slate-200 p-4">
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Previous review history
+                    </h4>
+                    <ul className="mt-2 space-y-2">
+                      {complaint.resolutions
+                        .filter((item) => item.id !== selectedResolution.id)
+                        .map((item) => (
+                          <li key={item.id} className="text-sm text-slate-700">
+                            <strong className="capitalize">{item.review_status.replaceAll("_", " ")}</strong>
+                            {item.reviewed_at ? ` on ${formatDate(item.reviewed_at)}` : ""}
+                            {item.reviewer ? ` by ${getFullName(item.reviewer)}` : ""}
+                            {item.review_comment ? ` — ${item.review_comment}` : ""}
+                          </li>
+                        ))}
+                    </ul>
+                  </div>
+                )}
               </section>
 
               {/* Evidence */}
@@ -511,7 +535,7 @@ export default function ResolutionQueue() {
                 </h3>
 
                 {attachments.length === 0 ? (
-                  <p className="mt-3 rounded-lg bg-slate-50 p-4 text-sm text-slate-500">
+                  <p className="mt-3 rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
                     No evidence files were submitted.
                   </p>
                 ) : (
@@ -519,20 +543,27 @@ export default function ResolutionQueue() {
                     {attachments.map((attachment) => (
                       <div
                         key={attachment.id}
-                        className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 p-3"
                       >
                         <div className="flex min-w-0 items-center gap-3">
-                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
                             <Icon name="file" className="h-5 w-5" />
                           </span>
 
                           <div className="min-w-0">
                             <p className="break-all text-sm font-medium text-slate-800">
-                              {attachment.file_name}
+                              {attachment.evidence_type === "before" ? "Before photo" : "Supporting evidence"}: {attachment.file_name}
                             </p>
                             <p className="text-xs text-slate-500">
                               {attachment.mime_type || "Evidence file"}
                             </p>
+                            {attachmentUrls[attachment.id] && attachment.mime_type?.startsWith("image/") && (
+                              <img
+                                src={attachmentUrls[attachment.id]}
+                                alt={`${attachment.evidence_type} resolution photo`}
+                                className="mt-3 max-h-64 w-full rounded-xl border border-slate-200 object-contain"
+                              />
+                            )}
                           </div>
                         </div>
 
@@ -550,7 +581,7 @@ export default function ResolutionQueue() {
                             type="button"
                             onClick={() => openEvidence(attachment)}
                             disabled={attachmentLoading[attachment.id]}
-                            className={`rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 ${focusRing}`}
+                            className={`glass-btn-secondary rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50 ${focusRing}`}
                           >
                             {attachmentLoading[attachment.id]
                               ? "Loading..."
@@ -582,7 +613,7 @@ export default function ResolutionQueue() {
                       setDecision("approved");
                       setActionError("");
                     }}
-                    className={`rounded-xl border p-4 text-left transition-colors disabled:opacity-50 ${
+                    className={`rounded-2xl border p-4 text-left transition-colors disabled:opacity-50 ${
                       decision === "approved"
                         ? "border-emerald-600 bg-emerald-50 ring-2 ring-emerald-600/20"
                         : "border-slate-200 hover:bg-slate-50"
@@ -603,7 +634,7 @@ export default function ResolutionQueue() {
                       setDecision("returned");
                       setActionError("");
                     }}
-                    className={`rounded-xl border p-4 text-left transition-colors disabled:opacity-50 ${
+                    className={`rounded-2xl border p-4 text-left transition-colors disabled:opacity-50 ${
                       decision === "returned"
                         ? "border-red-500 bg-red-50 ring-2 ring-red-500/20"
                         : "border-slate-200 hover:bg-slate-50"
@@ -647,7 +678,7 @@ export default function ResolutionQueue() {
                         ? "Explain what needs to be corrected or completed..."
                         : "Add an optional review comment..."
                     }
-                    className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 disabled:bg-slate-50"
+                    className="glass-input mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 disabled:bg-slate-50"
                   />
                   <p className="mt-1 text-right text-xs text-slate-400">
                     {reviewComment.length}/2000
@@ -657,7 +688,7 @@ export default function ResolutionQueue() {
                 {actionError && (
                   <div
                     role="alert"
-                    className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+                    className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700"
                   >
                     {actionError}
                   </div>
@@ -668,7 +699,7 @@ export default function ResolutionQueue() {
                     type="button"
                     onClick={closeReview}
                     disabled={actionLoading}
-                    className={`rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 ${focusRing}`}
+                    className={`glass-btn-secondary rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:opacity-50 ${focusRing}`}
                   >
                     Cancel
                   </button>
@@ -680,10 +711,10 @@ export default function ResolutionQueue() {
                       !decision ||
                       (decision === "returned" && !reviewComment.trim())
                     }
-                    className={`rounded-lg px-5 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 ${
+                    className={`rounded-xl px-5 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 ${
                       decision === "returned"
                         ? "bg-red-600 hover:bg-red-700"
-                        : "bg-emerald-700 hover:bg-emerald-800"
+                        : "glass-btn-primary"
                     } ${focusRing}`}
                   >
                     {actionLoading

@@ -69,6 +69,68 @@ class ComplaintController extends Controller
         ]);
     }
 
+    //* Display all complaints associated with the authenticated head's barangay.
+    public function barangayHistory(Request $request)
+    {
+        $user = $request->attributes->get('supabase_user');
+
+        if (!$user || empty($user['id'])) {
+            return response()->json(['message' => 'Authentication is required.'], 401);
+        }
+
+        $profile = Profile::find($user['id']);
+
+        if (!$profile || !$profile->is_active || $profile->role !== 'Barangay_Head') {
+            return response()->json(['message' => 'Only active Barangay Heads can access this complaint history.'], 403);
+        }
+
+        if (!$profile->barangay_id) {
+            return response()->json([
+                'message' => 'Your account has no assigned barangay.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'status' => [
+                'nullable',
+                Rule::in([
+                    'submitted',
+                    'under_review',
+                    'accepted',
+                    'declined',
+                    'assigned',
+                    'in_progress',
+                    'resolved',
+                ]),
+            ],
+        ]);
+
+        $complaints = Complaint::query()
+            ->where('barangay_id', $profile->barangay_id)
+            ->when(
+                $validated['status'] ?? null,
+                fn ($query, $status) => $query->where('status', $status)
+            )
+            ->with([
+                'category:id,name',
+                'barangay:id,name',
+            ])
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->paginate(10);
+
+        return response()->json([
+            'message' => 'Barangay complaint history retrieved successfully.',
+            'data' => $complaints->items(),
+            'pagination' => [
+                'current_page' => $complaints->currentPage(),
+                'last_page' => $complaints->lastPage(),
+                'per_page' => $complaints->perPage(),
+                'total' => $complaints->total(),
+            ],
+        ]);
+    }
+
     //* Display a paginated list of complaints submitted by the authenticated citizen.
     public function index(Request $request)
     {
@@ -107,7 +169,7 @@ class ComplaintController extends Controller
 
         $statistics = [
             'total' => (int) $complaints->total(),
-            'pending_review' => (int) ($statusCounts->get('submitted', 0)
+            'pre_assignment' => (int) ($statusCounts->get('submitted', 0)
                 + $statusCounts->get('under_review', 0)
                 + $statusCounts->get('accepted', 0)),
             'in_progress' => (int) ($statusCounts->get('assigned', 0)
@@ -158,9 +220,21 @@ class ComplaintController extends Controller
                 },
                 'attachments:id,complaint_id,file_name,mime_type,file_size',
                 'resolutions' => function ($query) {
-                    $query->where('review_status', 'approved')
+                    $query->select([
+                            'id',
+                            'complaint_id',
+                            'submitted_by',
+                            'resolution_description',
+                            'completed_at',
+                            'review_status',
+                            'reviewed_by',
+                            'submitted_at',
+                            'reviewed_at',
+                        ])
+                        ->where('review_status', 'approved')
                         ->with([
-                            'attachments:id,resolution_id,file_name,mime_type,file_size',
+                            'attachments:id,resolution_id,file_name,mime_type,file_size,evidence_type',
+                            'reviewer:id,full_name,email',
                         ])
                         ->orderByDesc('reviewed_at');
                 },
@@ -220,7 +294,9 @@ class ComplaintController extends Controller
 
             'title' => ['required', 'string', 'max:255'],
 
-            'description' => ['required', 'string', 'min:10'],
+            'description' => ['required', 'string', 'min:10', 'max:5000'],
+
+            'is_anonymous' => ['sometimes', 'boolean'],
 
             'attachments' => ['sometimes', 'array', 'max:5'],
 
@@ -255,7 +331,7 @@ class ComplaintController extends Controller
 
                 $uploadedFiles[] = [
                     'path' => $path,
-                    'file_name' => $file->getClientOriginalName(),
+                    'file_name' => 'evidence.' . $extension,
                     'mime_type' => $file->getMimeType(),
                     'file_size' => $file->getSize(),
                 ];
@@ -276,7 +352,7 @@ class ComplaintController extends Controller
 
         try {
             $complaint = DB::transaction(function () use ($profile, $validated, $uploadedFiles, $complaintId) {
-                $complaint = Complaint::create([
+                $complaint = new Complaint([
                     'id' => $complaintId,
                     'citizen_id' => $profile->id,
                     'category_id' => $validated['category_id'],
@@ -286,6 +362,8 @@ class ComplaintController extends Controller
                     'priority' => 'medium',
                     'status' => 'submitted',
                 ]);
+                $complaint->is_anonymous = (bool) ($validated['is_anonymous'] ?? false);
+                $complaint->save();
 
                 Notification::create([
                     'profile_id' => $profile->id,

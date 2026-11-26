@@ -6,15 +6,17 @@ use App\Models\Profile;
 use App\Services\SupabaseAdminService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Database\QueryException;
 use Illuminate\Validation\Rule;
+use InvalidArgumentException;
 use Throwable;
 
 class StaffAccountController extends Controller
 {
 
-    public function index()
+    public function index(SupabaseAdminService $supabase)
     {
         $staff = Profile::whereIn('role', [
             'Barangay_Head',
@@ -34,15 +36,112 @@ class StaffAccountController extends Controller
                 'created_at',
             ]);
 
+        try {
+            $authUsers = $supabase->listUsers();
+        } catch (Throwable $exception) {
+            Log::error('Staff account invitation status listing failed.', [
+                'exception_class' => $exception::class,
+                'exception_code' => $exception->getCode(),
+            ]);
+
+            return response()->json([
+                'message' => 'Unable to retrieve staff invitation status. Please try again.',
+            ], 502);
+        }
+
+        $staff->transform(function (Profile $profile) use ($authUsers) {
+            $authUser = $authUsers[$profile->id] ?? [];
+            $setupComplete = $authUser['app_metadata'][
+                SupabaseAdminService::PASSWORD_SETUP_COMPLETED_KEY
+            ] ?? null;
+            $profile->invitation_setup_completed = is_bool($setupComplete)
+                ? $setupComplete
+                : null;
+            $profile->invitation_pending = $setupComplete === false;
+
+            return $profile;
+        });
+
         return response()->json([
             'message' => 'Staff accounts retrieved successfully.',
             'staff' => $staff,
         ], 200);
     }
+
+    public function completePasswordSetup(Request $request, SupabaseAdminService $supabase)
+    {
+        $authUser = $request->attributes->get('supabase_user', []);
+        $userId = $authUser['id'] ?? null;
+
+        $staff = $userId ? Profile::find($userId) : null;
+        if (
+            !$staff
+            || !$staff->is_active
+            || !in_array($staff->role, [
+                'Barangay_Head',
+                'LGU-Staff',
+                'Department_Head',
+                'Department_Personnel',
+            ], true)
+        ) {
+            return response()->json(['message' => 'Active personnel account not found.'], 403);
+        }
+
+        $appMetadata = is_array($authUser['app_metadata'] ?? null)
+            ? $authUser['app_metadata']
+            : [];
+        if (($appMetadata[SupabaseAdminService::PASSWORD_SETUP_COMPLETED_KEY] ?? null) !== false) {
+            return response()->json(['message' => 'Password setup is not pending for this account.'], 409);
+        }
+
+        if (strcasecmp($authUser['email'] ?? '', $staff->email) !== 0) {
+            return response()->json(['message' => 'Staff email does not match the Auth account.'], 409);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'password' => [
+                'required',
+                'string',
+                'min:8',
+                'regex:/[A-Z]/',
+                'regex:/[a-z]/',
+                'regex:/[0-9]/',
+                'regex:/[^A-Za-z0-9\\s]/',
+            ],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Password does not meet the displayed requirements.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        try {
+            $supabase->setPasswordAndMarkSetupComplete(
+                $staff->id,
+                $staff->email,
+                $validator->validated()['password']
+            );
+
+            return response()->json(['message' => 'Password setup completed successfully.']);
+        } catch (InvalidArgumentException) {
+            return response()->json(['message' => 'Password setup is not pending for this account.'], 409);
+        } catch (Throwable) {
+            // Never report or return Auth request details that could contain credentials.
+            return response()->json(['message' => 'Unable to set the password. Please try again.'], 502);
+        }
+    }
+
     public function store(
         Request $request,
         SupabaseAdminService $supabase
     ) {
+        $email = $request->input('email');
+        if (is_string($email)) {
+            $request->merge(['email' => strtolower(trim($email))]);
+        }
+
         $validator = Validator::make($request->all(), [
             'full_name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255'],
@@ -101,6 +200,18 @@ class StaffAccountController extends Controller
             ], 409);
         }
 
+        if (
+            $data['role'] === 'Barangay_Head'
+            && Profile::where('role', 'Barangay_Head')
+                ->where('barangay_id', $data['barangay_id'])
+                ->where('is_active', true)
+                ->exists()
+        ) {
+            return response()->json([
+                'message' => 'This barangay already has an active Barangay Head.',
+            ], 409);
+        }
+
         if (Profile::where('email', $data['email'])->exists()) {
             return response()->json([
                 'message' => 'An account with this email already exists.',
@@ -123,6 +234,9 @@ class StaffAccountController extends Controller
             }
 
             $authUserId = $authUser['id'];
+
+            // New invitations begin in an explicit, trusted incomplete state.
+            $supabase->markPasswordSetupPending($authUserId);
 
             //*Save the staff profile in our database
             $profile = DB::transaction(function () use ($data, $authUser) {
@@ -153,12 +267,36 @@ class StaffAccountController extends Controller
                 }
             }
 
+            if ($e instanceof InvalidArgumentException) {
+                return response()->json([
+                    'message' => $e->getMessage(),
+                ], 503);
+            }
+
+            if ($e->getCode() === 429) {
+                Log::warning('Supabase rate-limited a staff invitation email.');
+
+                return response()->json([
+                    'message' => 'Supabase temporarily rate-limited invitation email delivery. Configure custom SMTP in Supabase or wait before retrying.',
+                ], 429);
+            }
+
             if (
                 $e instanceof QueryException
                 && str_contains($e->getMessage(), 'profiles_one_active_department_head_per_department_unique')
             ) {
                 return response()->json([
                     'message' => 'This department already has an active Department Head.',
+                ], 409);
+            }
+
+            if (
+                $e instanceof QueryException
+                && $data['role'] === 'Barangay_Head'
+                && $this->isActiveBarangayHeadUniqueViolation($e)
+            ) {
+                return response()->json([
+                    'message' => 'This barangay already has an active Barangay Head.',
                 ], 409);
             }
 
@@ -169,6 +307,24 @@ class StaffAccountController extends Controller
             ], 500);
         }
     }
+
+    private function isActiveBarangayHeadUniqueViolation(
+        QueryException $exception
+    ): bool {
+        if (str_contains(
+            $exception->getMessage(),
+            'profiles_one_active_barangay_head_per_barangay_unique'
+        )) {
+            return true;
+        }
+
+        return DB::connection()->getDriverName() === 'sqlite'
+            && str_contains(
+                $exception->getMessage(),
+                'UNIQUE constraint failed: profiles.barangay_id'
+            );
+    }
+
     public function deactivate(string $staffId)
     {
         //* Find staff profile by ID

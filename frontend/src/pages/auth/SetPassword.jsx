@@ -2,14 +2,15 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import tagoloanSeal from "../../assets/System_Logo.png";
 import { supabase } from "../../lib/supabase";
+import { completeStaffPasswordSetup } from "../../lib/api";
 
 const focusRing =
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2";
 
 const inputClass =
-    "block min-h-12 w-full rounded-lg border border-slate-300 bg-white px-3.5 py-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 hover:border-slate-400 focus:border-emerald-700 focus:ring-4 focus:ring-emerald-700/10";
+    "block min-h-12 w-full rounded-xl border border-slate-300 bg-white/90 px-3.5 py-3 text-sm text-slate-900 shadow-sm outline-none backdrop-blur-md transition placeholder:text-slate-400 hover:border-slate-400 focus:border-emerald-700 focus:ring-4 focus:ring-emerald-700/10";
 
-    //*  Password rules (display only) 
+    //* Password rules enforced by both the form and backend.
 const passwordRules = [
     { id: "length", label: "At least 8 characters", test: (p) => p.length >= 8 },
     { id: "upper", label: "One uppercase letter", test: (p) => /[A-Z]/.test(p) },
@@ -18,7 +19,7 @@ const passwordRules = [
     {
         id: "special",
         label: "One special character (! @ # $ %)",
-        test: (p) => /[^A-Za-z0-9]/.test(p),
+        test: (p) => /[^A-Za-z0-9\s]/.test(p),
     },
 ];
 
@@ -171,7 +172,7 @@ function PasswordInput({ id, value, onChange, disabled, placeholder, describedBy
                 disabled={disabled}
                 aria-label={visible ? "Hide password" : "Show password"}
                 aria-pressed={visible}
-                className={`absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-lg text-slate-500 transition-colors hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`}
+                className={`absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-slate-500 transition-colors hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`}
             >
                 <EyeIcon off={visible} />
             </button>
@@ -293,9 +294,21 @@ function Brand({ light = false }) {
 //*  Page shell shared by every state 
 function AuthShell({ panelText, panelExtra, children }) {
     return (
-        <div className="grid min-h-screen bg-white font-sans text-slate-900 antialiased lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
+        <div className="app-bg grid min-h-screen font-sans text-slate-900 antialiased lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
             {/* LEFT BRANDING PANEL */}
             <aside className="relative hidden flex-col justify-between overflow-hidden bg-emerald-950 p-12 text-white lg:flex xl:p-16">
+                {/* Municipal hall photo with a deep green wash */}
+                <img
+                    src="/tagoloan-hall.jpg"
+                    alt=""
+                    aria-hidden="true"
+                    className="absolute inset-0 h-full w-full object-cover object-[50%_40%]"
+                />
+                <div
+                    aria-hidden="true"
+                    className="absolute inset-0 bg-gradient-to-br from-emerald-950/90 via-emerald-900/80 to-emerald-700/60"
+                />
+
                 <div
                     aria-hidden="true"
                     className="pointer-events-none absolute -top-40 -left-40 h-[26rem] w-[26rem] rounded-full bg-emerald-800/30 blur-3xl"
@@ -326,24 +339,24 @@ function AuthShell({ panelText, panelExtra, children }) {
                         Your concerns, handled in the open.
                     </h2>
 
-                    <p className="mt-4 text-base leading-7 text-emerald-100/80">
+                    <p className="mt-4 text-base leading-7 text-emerald-100/90">
                         {panelText}
                     </p>
 
                     {panelExtra}
                 </div>
 
-                <p className="relative text-xs text-emerald-100/60">
+                <p className="relative text-xs text-emerald-100/70">
                     Municipality of Tagoloan
                 </p>
             </aside>
 
             {/* RIGHT CONTENT AREA */}
-            <div className="flex min-h-screen flex-col bg-slate-50/40">
+            <div className="flex min-h-screen flex-col">
                 <header className="flex items-center justify-between gap-4 px-6 py-5 sm:px-10">
                     <Link
                         to="/"
-                        className={`flex items-center gap-2.5 rounded-md lg:invisible ${focusRing}`}
+                        className={`flex items-center gap-2.5 rounded-full lg:invisible ${focusRing}`}
                         aria-label="BantaySerbisyo home"
                     >
                         <Brand />
@@ -355,7 +368,7 @@ function AuthShell({ panelText, panelExtra, children }) {
                     {children}
                 </main>
 
-                <footer className="px-6 py-6 text-center text-xs text-slate-500 sm:px-10">
+                <footer className="px-6 py-6 text-center text-xs text-slate-600 sm:px-10">
                     © {new Date().getFullYear()} BantaySerbisyo · Municipality of Tagoloan
                 </footer>
             </div>
@@ -389,16 +402,50 @@ function SetPassword() {
 
     useEffect(() => {
         async function checkInvitation() {
-            const { data, error } = await supabase.auth.getSession();
+            try {
+                const url = new URL(window.location.href);
+                const callbackParams = new URLSearchParams(url.hash.slice(1));
+                const callbackError = callbackParams.get("error_description") || url.searchParams.get("error_description");
+                if (callbackError) {
+                    setError(callbackError);
+                    setLoading(false);
+                    return;
+                }
 
-            if (error || !data.session) {
-                setError("Your invitation link is invalid or has expired.");
+                const tokenHash = url.searchParams.get("token_hash");
+                const callbackType = url.searchParams.get("type") || callbackParams.get("type");
+                if (callbackType === "recovery") {
+                    setError("Password reset links are not used for personnel accounts. Ask an administrator to send a new invitation if you have not set your password yet.");
+                    setLoading(false);
+                    return;
+                }
+                if (tokenHash && ["invite", "signup"].includes(callbackType)) {
+                    const { error: verifyError } = await supabase.auth.verifyOtp({
+                        token_hash: tokenHash,
+                        type: callbackType,
+                    });
+                    if (verifyError) throw verifyError;
+                }
+
+                const { data, error: sessionError } = await supabase.auth.getSession();
+                if (sessionError || !data.session) {
+                    setError("Your invitation link is invalid, expired, or has already been used. Ask an administrator to resend the invitation.");
+                    setLoading(false);
+                    return;
+                }
+
+                setHasSession(true);
                 setLoading(false);
-                return;
-            }
 
-            setHasSession(true);
-            setLoading(false);
+                // Remove callback credentials from the visible URL after Supabase consumes them.
+                const cleanQuery = new URLSearchParams(url.searchParams);
+                ["code", "token_hash", "type"].forEach((key) => cleanQuery.delete(key));
+                const query = cleanQuery.toString();
+                window.history.replaceState({}, document.title, `${url.pathname}${query ? `?${query}` : ""}`);
+            } catch (callbackError) {
+                setError(callbackError.message || "Your invitation link is invalid, expired, or has already been used.");
+                setLoading(false);
+            }
         }
 
         checkInvitation();
@@ -408,8 +455,8 @@ function SetPassword() {
         e.preventDefault();
         setError("");
 
-        if (password.length < 8) {
-            setError("Password must be at least 8 characters.");
+        if (!passwordRules.every((rule) => rule.test(password))) {
+            setError("Password must meet all listed requirements.");
             return;
         }
 
@@ -421,11 +468,7 @@ function SetPassword() {
         try {
             setSaving(true);
 
-            const { error } = await supabase.auth.updateUser({
-                password,
-            });
-
-            if (error) throw error;
+            await completeStaffPasswordSetup(password);
 
             await supabase.auth.signOut();
 
@@ -444,10 +487,10 @@ function SetPassword() {
 
     /* Derived values used only for display */
     const passedCount = passwordRules.filter((r) => r.test(password)).length;
-    const allRulesMet = passedCount === passwordRules.length;
     const showMatchStatus = confirmPassword.length > 0;
     const passwordsMatch = password === confirmPassword;
-    const canSubmit = allRulesMet && passwordsMatch && !saving;
+    const passwordRequirementsMet = passwordRules.every((rule) => rule.test(password));
+    const canSubmit = passwordRequirementsMet && passwordsMatch && !saving;
 
     //* Loading skeleton
     if (loading) {
@@ -455,14 +498,14 @@ function SetPassword() {
             <AuthShell panelText={formPanelText} panelExtra={formPanelExtra}>
                 <div
                     role="status"
-                    className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8"
+                    className="glass w-full max-w-md rounded-3xl p-6 sm:p-8"
                 >
                     <span className="sr-only">Verifying invitation...</span>
 
                     <div aria-hidden="true">
                         {/* Icon + title + subtitle */}
                         <div className="mb-7">
-                            <Skeleton className="mb-5 h-12 w-12 rounded-xl" />
+                            <Skeleton className="mb-5 h-12 w-12 rounded-2xl" />
                             <Skeleton className="h-9 w-56 max-w-full rounded-md" />
                             <Skeleton className="mt-3 h-4 w-full rounded" />
                             <Skeleton className="mt-2 h-4 w-2/3 rounded" />
@@ -472,7 +515,7 @@ function SetPassword() {
                             {/* New password + strength + rules */}
                             <div>
                                 <Skeleton className="mb-2 h-4 w-28 rounded" />
-                                <Skeleton className="h-12 w-full rounded-lg" />
+                                <Skeleton className="h-12 w-full rounded-xl" />
 
                                 <div className="mt-3 flex gap-1.5">
                                     {Array.from({ length: 4 }).map((_, i) => (
@@ -496,11 +539,11 @@ function SetPassword() {
                             {/* Confirm password */}
                             <div>
                                 <Skeleton className="mb-2 h-4 w-32 rounded" />
-                                <Skeleton className="h-12 w-full rounded-lg" />
+                                <Skeleton className="h-12 w-full rounded-xl" />
                             </div>
 
                             {/* Submit button */}
-                            <Skeleton className="h-12 w-full rounded-lg" />
+                            <Skeleton className="h-12 w-full rounded-full" />
                         </div>
 
                         <Skeleton className="mx-auto mt-6 h-3 w-4/5 rounded" />
@@ -516,7 +559,7 @@ function SetPassword() {
             <AuthShell
                 panelText="A secure account helps you access BantaySerbisyo  and connect with the Municipality of Tagoloan."
             >
-                <section className="w-full max-w-md text-center">
+                <section className="glass w-full max-w-md rounded-3xl p-6 text-center sm:p-8">
                     <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-700">
                         <svg
                             viewBox="0 0 24 24"
@@ -539,14 +582,14 @@ function SetPassword() {
 
                     <p
                         role="alert"
-                        className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-800"
+                        className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-800"
                     >
                         {error}
                     </p>
 
                     <Link
                         to="/login"
-                        className={`mt-6 inline-flex min-h-12 items-center justify-center rounded-lg bg-emerald-800 px-6 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-900 ${focusRing}`}
+                        className={`glass-btn-primary mt-6 inline-flex min-h-12 items-center justify-center rounded-full px-7 text-sm font-semibold ${focusRing}`}
                     >
                         Go to Login
                     </Link>
@@ -559,11 +602,11 @@ function SetPassword() {
     return (
         <AuthShell panelText={formPanelText} panelExtra={formPanelExtra}>
             <section
-                className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8"
+                className="glass w-full max-w-md rounded-3xl p-6 sm:p-8"
                 aria-labelledby="auth-title"
             >
                 <div className="mb-7">
-                    <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-800">
+                    <div className="glass-icon mb-5 flex h-12 w-12 items-center justify-center rounded-2xl">
                         <LockIcon />
                     </div>
 
@@ -635,7 +678,7 @@ function SetPassword() {
                     {error && (
                         <div
                             role="alert"
-                            className="flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-800"
+                            className="flex items-start gap-2.5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-800"
                         >
                             <AlertIcon />
                             <span>{error}</span>
@@ -645,7 +688,7 @@ function SetPassword() {
                     <button
                         type="submit"
                         disabled={!canSubmit}
-                        className={`flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-emerald-800 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-900 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none ${focusRing}`}
+                        className={`glass-btn-primary flex min-h-12 w-full items-center justify-center gap-2 rounded-full text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`}
                     >
                         {saving && <Spinner />}
                         {saving ? "Saving..." : "Create password"}

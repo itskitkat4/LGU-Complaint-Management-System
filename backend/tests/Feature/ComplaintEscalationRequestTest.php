@@ -185,10 +185,43 @@ class ComplaintEscalationRequestTest extends TestCase
             '*' => Http::response([
                 'id' => $id,
                 'email' => $email,
+                'app_metadata' => ['bantayserbisyo_password_setup_completed' => true],
             ], 200),
         ]);
 
-        $this->withToken('fake-test-token');
+        $this->withToken($this->syntheticSupabaseToken($id, ['password']));
+    }
+
+    private function assignComplaintToDepartmentHead(): void
+    {
+        ComplaintAssignment::where('complaint_id', $this->complaintId)
+            ->whereNull('ended_at')
+            ->update(['ended_at' => now()]);
+
+        ComplaintAssignment::create([
+            'complaint_id' => $this->complaintId,
+            'assigned_to' => $this->departmentHeadId,
+            'assigned_by' => $this->departmentHeadId,
+            'assignment_level' => 'lgu',
+            'department_id' => $this->departmentId,
+            'assigned_at' => now(),
+        ]);
+
+        Complaint::whereKey($this->complaintId)
+            ->update(['resolution_level' => 'lgu']);
+    }
+
+    private function createPendingExternalEscalation(): ComplaintEscalation
+    {
+        return ComplaintEscalation::create([
+            'complaint_id' => $this->complaintId,
+            'escalation_type' => 'department_to_higher_authority',
+            'requested_by' => $this->departmentHeadId,
+            'origin_department_id' => $this->departmentId,
+            'higher_authority_office' => 'Regional Office',
+            'reason' => 'This requires review beyond department authority.',
+            'status' => 'pending',
+        ]);
     }
 
     public function test_barangay_head_can_request_department_escalation(): void
@@ -288,6 +321,102 @@ class ComplaintEscalationRequestTest extends TestCase
             ->assertJsonValidationErrors(['reason']);
 
         $this->assertDatabaseCount('complaint_escalations', 0);
+    }
+
+    public function test_escalation_reason_accepts_its_2000_character_limit(): void
+    {
+        $this->authenticateAs($this->barangayHeadId, $this->barangayEmail);
+
+        $response = $this->postJson(
+            "/api/complaints/{$this->complaintId}/escalations",
+            [
+                'reason' => str_repeat('r', 2000),
+                'destination_department_id' => $this->departmentId,
+            ]
+        );
+
+        $response->assertCreated()
+            ->assertJsonPath('escalation.reason', str_repeat('r', 2000));
+    }
+
+    public function test_escalation_reason_rejects_more_than_2000_characters(): void
+    {
+        $this->authenticateAs($this->barangayHeadId, $this->barangayEmail);
+
+        $this->postJson(
+            "/api/complaints/{$this->complaintId}/escalations",
+            [
+                'reason' => str_repeat('r', 2001),
+                'destination_department_id' => $this->departmentId,
+            ]
+        )->assertUnprocessable()
+            ->assertJsonValidationErrors(['reason']);
+
+        $this->assertDatabaseCount('complaint_escalations', 0);
+    }
+
+    public function test_higher_authority_office_accepts_its_255_character_limit(): void
+    {
+        $this->assignComplaintToDepartmentHead();
+        $this->authenticateAs($this->departmentHeadId, $this->departmentEmail);
+
+        $response = $this->postJson(
+            "/api/complaints/{$this->complaintId}/escalations",
+            [
+                'reason' => 'This issue requires higher authority review.',
+                'higher_authority_office' => str_repeat('o', 255),
+            ]
+        );
+
+        $response->assertCreated()
+            ->assertJsonPath('escalation.higher_authority_office', str_repeat('o', 255));
+    }
+
+    public function test_higher_authority_office_rejects_more_than_255_characters(): void
+    {
+        $this->assignComplaintToDepartmentHead();
+        $this->authenticateAs($this->departmentHeadId, $this->departmentEmail);
+
+        $this->postJson(
+            "/api/complaints/{$this->complaintId}/escalations",
+            [
+                'reason' => 'This issue requires higher authority review.',
+                'higher_authority_office' => str_repeat('o', 256),
+            ]
+        )->assertUnprocessable()
+            ->assertJsonValidationErrors(['higher_authority_office']);
+
+        $this->assertDatabaseCount('complaint_escalations', 0);
+    }
+
+    public function test_escalation_outcome_notes_accept_their_2000_character_limit(): void
+    {
+        $escalation = $this->createPendingExternalEscalation();
+        $this->authenticateAs($this->departmentHeadId, $this->departmentEmail);
+
+        $this->postJson(
+            "/api/department/escalations/{$escalation->id}/outcome",
+            ['outcome_notes' => str_repeat('n', 2000)]
+        )->assertOk()
+            ->assertJsonPath('escalation.outcome_notes', str_repeat('n', 2000));
+    }
+
+    public function test_escalation_outcome_notes_reject_more_than_2000_characters(): void
+    {
+        $escalation = $this->createPendingExternalEscalation();
+        $this->authenticateAs($this->departmentHeadId, $this->departmentEmail);
+
+        $this->postJson(
+            "/api/department/escalations/{$escalation->id}/outcome",
+            ['outcome_notes' => str_repeat('n', 2001)]
+        )->assertUnprocessable()
+            ->assertJsonValidationErrors(['outcome_notes']);
+
+        $this->assertDatabaseHas('complaint_escalations', [
+            'id' => $escalation->id,
+            'status' => 'pending',
+            'outcome_notes' => null,
+        ]);
     }
 
     public function test_escalation_request_does_not_change_complaint_or_active_assignment(): void

@@ -69,19 +69,22 @@ useEffect(() => {
     <AdminLayout title="Barangay Management">
       <div className="space-y-6">
         {/* Page Heading */}
-        <section>
-          <h2 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-            Barangay Management
-          </h2>
+        <section className="flex items-start gap-3">
+          <span className="mt-1 h-10 w-1 shrink-0 rounded-full bg-emerald-500" aria-hidden="true" />
+          <div>
+            <h2 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+              Barangay Management
+            </h2>
 
-          <p className="mt-2 text-sm leading-6 text-slate-600">
-            View and manage registered barangays in the municipality.
-          </p>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              View and manage registered barangays in the municipality.
+            </p>
+          </div>
         </section>
 
         {/* Summary */}
         <section className="grid gap-4 sm:grid-cols-2">
-          <div className="rounded-xl border border-slate-200 bg-white p-5">
+          <div className="glass rounded-2xl p-5">
             <p className="text-sm font-medium text-slate-500">
               Total Registered Barangays
             </p>
@@ -95,7 +98,7 @@ useEffect(() => {
             )}
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white p-5">
+          <div className="glass rounded-2xl p-5">
             <p className="text-sm font-medium text-slate-500">
               Search Results
             </p>
@@ -111,7 +114,7 @@ useEffect(() => {
         </section>
 
         {/* Barangay List */}
-        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <section className="glass overflow-hidden rounded-2xl">
           <div className="flex flex-col gap-4 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
             <div>
               <h3 className="font-semibold text-slate-900">
@@ -144,7 +147,7 @@ useEffect(() => {
                 type="button"
                 onClick={fetchBarangays}
                 disabled={loading}
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="glass-btn-secondary inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Icon name="refresh-cw" className="h-4 w-4" />
                 Refresh
@@ -160,7 +163,7 @@ useEffect(() => {
                 className="w-full min-w-[550px] text-left text-sm"
                 aria-hidden="true"
               >
-                <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <thead className="glass-soft text-xs font-semibold uppercase tracking-wide text-slate-500">
                   <tr>
                     <th className="px-5 py-3.5">Barangay Name</th>
                     <th className="px-5 py-3.5">Barangay Code</th>
@@ -200,7 +203,7 @@ useEffect(() => {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[550px] text-left text-sm">
-                <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <thead className="glass-soft text-xs font-semibold uppercase tracking-wide text-slate-500">
                   <tr>
                     <th className="px-5 py-3.5">Barangay Name</th>
                     <th className="px-5 py-3.5">Barangay Code</th>
@@ -212,7 +215,7 @@ useEffect(() => {
                   {filteredBarangays.map((barangay) => (
                     <tr
                       key={barangay.id}
-                      className="transition-colors hover:bg-slate-50"
+                      className="glass-hover"
                     >
                       <td className="px-5 py-4 font-semibold text-slate-900">
                         {barangay.name}

@@ -1,22 +1,29 @@
 <?php
 
-use App\Http\Controllers\Api\AdminDashboardController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use App\Http\Middleware\VerifySupabaseToken;
-use App\Http\Controllers\Api\CitizenProfileController;
+
+use App\Http\Controllers\Api\AdminComplaintController;
+use App\Http\Controllers\Api\AdminDashboardController;
+use App\Http\Controllers\Api\AIComplaintController;
 use App\Http\Controllers\Api\BarangayController;
+use App\Http\Controllers\Api\CitizenProfileController;
+use App\Http\Controllers\Api\ComplaintAttachmentController;
 use App\Http\Controllers\Api\ComplaintCategoryController;
 use App\Http\Controllers\Api\ComplaintController;
-use App\Http\Controllers\Api\StaffComplaintController;
-use App\Http\Controllers\Api\DepartmentComplaintController;
-use App\Http\Controllers\Api\ComplaintAttachmentController;
-use App\Http\Controllers\Api\DepartmentController;
-use App\Http\Controllers\Api\StaffAccountController;
 use App\Http\Controllers\Api\ComplaintResolutionController;
+use App\Http\Controllers\Api\DashboardSummaryController;
+use App\Http\Controllers\Api\DepartmentComplaintController;
+use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\FeedbackController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\StaffAccountController;
+use App\Http\Controllers\Api\StaffComplaintController;
 use App\Http\Controllers\Api\StaffReportController;
+
+use App\Http\Middleware\RedactAnonymousComplaintIdentity;
+use App\Http\Middleware\VerifySupabaseToken;
+
 use App\Models\Profile;
 
 //* PUBLIC ROUTES
@@ -25,7 +32,7 @@ Route::get('/barangays', [BarangayController::class, 'index']);
 Route::get('/complaint-categories', [ComplaintCategoryController::class, 'index']);
 
 //* AUTHENTICATED ROUTES
-Route::middleware(VerifySupabaseToken::class)->group(function () {
+Route::middleware([VerifySupabaseToken::class, RedactAnonymousComplaintIdentity::class, 'throttle:api'])->group(function () {
 
     Route::get('/auth/me', function (Request $request) {
         $user = $request->attributes->get('supabase_user');
@@ -56,8 +63,11 @@ Route::middleware(VerifySupabaseToken::class)->group(function () {
     });
 
     //* STAFF ACCOUNT ROUTES
+    Route::post('/staff-accounts/complete-password-setup', [StaffAccountController::class, 'completePasswordSetup'])
+        ->name('staff-accounts.complete-password-setup');
+
     Route::middleware('role:System Administrator')->group(function () {
-        Route::post('/staff-accounts', [StaffAccountController::class, 'store']);
+        Route::post('/staff-accounts', [StaffAccountController::class, 'store'])->middleware('throttle:10,1');
         Route::get('/staff-accounts', [StaffAccountController::class, 'index']);
         Route::patch('/staff-accounts/{staffId}/deactivate', [StaffAccountController::class, 'deactivate',]);
     });
@@ -71,6 +81,8 @@ Route::middleware(VerifySupabaseToken::class)->group(function () {
         Route::put('/departments/{id}', [DepartmentController::class, 'update']);
         Route::delete('/departments/{id}', [DepartmentController::class, 'delete']);
         Route::get('/admin/dashboard-summary', [AdminDashboardController::class, 'summary']);
+        Route::get('/admin/complaints', [AdminComplaintController::class, 'index']);
+        Route::get('/admin/complaints/{complaintId}', [AdminComplaintController::class, 'show']);
     });
 
     //* CITIZEN PROFILE ROUTES
@@ -79,19 +91,26 @@ Route::middleware(VerifySupabaseToken::class)->group(function () {
 
     //* CITIZEN COMPLAINT ROUTES
     Route::middleware('role:citizen')->group(function () {
-        Route::post('/complaints', [ComplaintController::class, 'store']);
+        Route::post('/complaints', [ComplaintController::class, 'store'])->middleware('throttle:10,1');
         Route::get('/complaints', [ComplaintController::class, 'index']);
         Route::get('/complaints/{complaintId}', [ComplaintController::class, 'show']);
-    });
+    Route::post('/citizen/complaint-assistant/chat', [AIComplaintController::class, 'chat'])
+        ->middleware('throttle:ai-complaint')
+        // Use the stricter user-keyed limiter instead of the shared IP API limit.
+        ->withoutMiddleware('throttle:api');
+  });
 
     //* BARANGAY HEAD ROUTES
     Route::middleware('role:Barangay_Head')->group(function () {
+        Route::get('/barangay/dashboard-summary', [DashboardSummaryController::class, 'barangaySummary']);
+        Route::get('/barangay/complaints/history', [ComplaintController::class, 'barangayHistory']);
         Route::get('/barangay/complaints', [ComplaintController::class, 'barangayIndex']);
         Route::post('/barangay/complaints/{complaintId}/start', [ComplaintController::class, 'startBarangayWork']);
     });
 
     //* LGU-STAFF REVIEW ROUTE
     Route::middleware('role:LGU-Staff')->group(function () {
+        Route::get('/staff/dashboard-summary', [DashboardSummaryController::class, 'staffSummary']);
         Route::get('/staff/complaints/history', [StaffComplaintController::class, 'staffHistory']);
         Route::get('/staff/complaints', [StaffComplaintController::class, 'staffIndex']);
         Route::get('/staff/complaints/{complaintId}', [StaffComplaintController::class, 'staffShow']);
@@ -129,6 +148,7 @@ Route::middleware(VerifySupabaseToken::class)->group(function () {
         Route::post('/complaints/{complaintId}/escalations', [ComplaintController::class, 'requestEscalation']);
     });
     Route::middleware('role:Department_Personnel')->group(function () {
+        Route::get('/department/personnel/dashboard-summary', [DashboardSummaryController::class, 'personnelSummary']);
         Route::get('/department/personnel/complaints', [DepartmentComplaintController::class, 'personnelIndex']);
         Route::get('/department/personnel/complaints/{complaintId}', [DepartmentComplaintController::class, 'personnelShow']);
         Route::post('/department/personnel/complaints/{complaintId}/start', [DepartmentComplaintController::class, 'startWork']);
@@ -140,6 +160,7 @@ Route::middleware(VerifySupabaseToken::class)->group(function () {
 
     //* Feedback Route
 
+    Route::get('/feedback', [FeedbackController::class, 'index']);
     Route::get('/feedback/eligible-complaints', [FeedbackController::class, 'eligibleComplaints']);
     Route::post('/complaints/{complaint_id}/feedback', [FeedbackController::class, 'store']);
 

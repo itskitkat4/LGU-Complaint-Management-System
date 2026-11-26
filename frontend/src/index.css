@@ -1,4 +1,3 @@
-
 @import "tailwindcss";
 
 :root {
@@ -101,3 +100,301 @@ body {
     transition: none;
   }
 }
+
+/* ------------------------------------------------------------------
+   Liquid glass design system
+   Note: these classes are unlayered, so they win over Tailwind utilities.
+   Do not combine a glass class with bg-*, border-* or shadow-* utilities
+   on the same element.
+------------------------------------------------------------------- */
+
+/* Page background: soft mint gradient with light blobs */
+.app-bg {
+  background-color: #e9f4f1;
+  background-image:
+    radial-gradient(52rem 38rem at 8% -8%, rgba(110, 231, 183, 0.45), transparent 62%),
+    radial-gradient(46rem 34rem at 100% 0%, rgba(167, 243, 208, 0.55), transparent 58%),
+    radial-gradient(44rem 32rem at 100% 100%, rgba(52, 211, 153, 0.32), transparent 62%),
+    radial-gradient(36rem 28rem at 0% 100%, rgba(167, 243, 208, 0.4), transparent 60%);
+  background-attachment: fixed;
+}
+
+.dark .app-bg {
+  background-color: #0b1220;
+  background-image:
+    radial-gradient(52rem 38rem at 8% -8%, rgba(16, 185, 129, 0.2), transparent 62%),
+    radial-gradient(46rem 34rem at 100% 0%, rgba(5, 150, 105, 0.18), transparent 58%),
+    radial-gradient(44rem 32rem at 100% 100%, rgba(16, 185, 129, 0.14), transparent 62%);
+}
+
+/* Main frosted surface: sidebar, cards, panels, header pills */
+.glass {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.74), rgba(255, 255, 255, 0.44));
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  box-shadow:
+    0 10px 32px rgba(15, 90, 70, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+}
+
+.dark .glass {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.72), rgba(15, 23, 42, 0.5));
+  border-color: rgba(255, 255, 255, 0.09);
+  box-shadow:
+    0 10px 32px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+/* Lighter inner surface, for cards nested inside a glass surface */
+.glass-soft {
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.dark .glass-soft {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Active navigation item */
+.glass-active {
+  background: linear-gradient(135deg, rgba(167, 243, 208, 0.8), rgba(209, 250, 229, 0.55));
+  box-shadow:
+    0 6px 16px rgba(16, 185, 129, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.dark .glass-active {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.3), rgba(5, 150, 105, 0.16));
+  box-shadow:
+    0 6px 16px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Hover state for glass items */
+.glass-hover {
+  transition: background-color 160ms ease;
+}
+
+.glass-hover:hover {
+  background-color: rgba(255, 255, 255, 0.55);
+}
+
+.dark .glass-hover:hover {
+  background-color: rgba(255, 255, 255, 0.07);
+}
+
+/* Emerald gradient icon tile */
+.glass-icon {
+  color: #ffffff;
+  background: linear-gradient(145deg, #10b981, #047857);
+  box-shadow:
+    0 8px 18px rgba(5, 150, 105, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+/* Primary button */
+.glass-btn-primary {
+  color: #ffffff;
+  background: linear-gradient(135deg, #047857, #064e3b);
+  box-shadow:
+    0 8px 18px rgba(5, 150, 105, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition: filter 160ms ease, transform 160ms ease;
+}
+
+.glass-btn-primary:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+/* Secondary button */
+.glass-btn-secondary {
+  background: rgba(255, 255, 255, 0.6);
+  box-shadow:
+    0 4px 12px rgba(15, 90, 70, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  transition: background-color 160ms ease;
+}
+
+.glass-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.dark .glass-btn-secondary {
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.dark .glass-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* Form inputs (border stays on the border-* utilities) */
+.glass-input {
+  background: rgba(255, 255, 255, 0.65);
+  box-shadow: inset 0 1px 2px rgba(15, 90, 70, 0.06);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.dark .glass-input {
+  background: rgba(15, 23, 42, 0.55);
+  box-shadow: none;
+}
+
+/* Glass-liquid loading placeholders shared by every portal. */
+.liquid-skeleton,
+.animate-pulse.bg-slate-200 {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  background: linear-gradient(110deg, rgba(203, 213, 225, 0.42) 25%, rgba(255, 255, 255, 0.88) 45%, rgba(167, 243, 208, 0.48) 62%, rgba(203, 213, 225, 0.42) 80%);
+  background-size: 240% 100%;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 4px 14px rgba(15, 90, 70, 0.05);
+  -webkit-backdrop-filter: blur(12px) saturate(145%);
+  backdrop-filter: blur(12px) saturate(145%);
+  animation: liquid-skeleton-shimmer 1.8s ease-in-out infinite;
+}
+
+.dark .liquid-skeleton,
+.dark .animate-pulse.bg-slate-200 {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: linear-gradient(110deg, rgba(51, 65, 85, 0.78) 25%, rgba(100, 116, 139, 0.5) 45%, rgba(16, 185, 129, 0.19) 62%, rgba(51, 65, 85, 0.78) 80%);
+  background-size: 240% 100%;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
+@keyframes liquid-skeleton-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -140% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .liquid-skeleton,
+  .animate-pulse.bg-slate-200 {
+    animation: none;
+    background-position: 50% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glass-btn-primary,
+  .glass-btn-secondary,
+  .glass-hover {
+    transition: none;
+  }
+
+  .glass-btn-primary:hover {
+    transform: none;
+  }
+}
+
+
+/* Landing Motion */
+.lg-live { isolation: isolate; }
+.dark .lg-live::before { opacity: 0.35; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .lg-live::before {
+    content: "";
+    position: fixed;
+    inset: -10%;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(28rem 28rem at 20% 30%, rgb(167 243 208 / 0.45), transparent 70%),
+      radial-gradient(26rem 26rem at 80% 60%, rgb(125 211 252 / 0.3), transparent 70%);
+    animation: lg-bg-drift 26s ease-in-out infinite alternate;
+  }
+  @keyframes lg-bg-drift { to { transform: translate3d(4%, -3%, 0) scale(1.08); } }
+
+  .lg-rise {
+    animation: lg-rise 0.75s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  .lg-rise-delay-50 { animation-delay: 50ms; }
+  .lg-rise-delay-180 { animation-delay: 180ms; }
+  .lg-rise-delay-250 { animation-delay: 250ms; }
+  .lg-rise-delay-300 { animation-delay: 300ms; }
+  .lg-rise-delay-420 { animation-delay: 420ms; }
+  .lg-rise-delay-900 { animation-delay: 900ms; }
+  .lg-rise-delay-1300 { animation-delay: 1300ms; }
+  @keyframes lg-rise {
+    from { opacity: 0; transform: translateY(18px); }
+    to { opacity: 1; transform: none; }
+  }
+
+  .lg-pulse { position: relative; }
+  .lg-pulse::after {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    border-radius: 9999px;
+    border: 2px solid rgb(4 120 87 / 0.55);
+    animation: lg-ping 2.2s ease-out infinite;
+  }
+  @keyframes lg-ping {
+    from { transform: scale(1); opacity: 0.8; }
+    to { transform: scale(1.9); opacity: 0; }
+  }
+
+  .lg-float { animation: lg-float 6s ease-in-out infinite; }
+  @keyframes lg-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-7px); }
+  }
+
+  @supports (animation-timeline: view()) {
+    .lg-reveal {
+      animation: lg-reveal linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 40%;
+    }
+    .lg-draw {
+      transform-origin: left center;
+      animation: lg-draw linear both;
+      animation-timeline: view();
+      animation-range: entry 10% entry 70%;
+    }
+  }
+  @keyframes lg-reveal {
+    from { opacity: 0; transform: translateY(28px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes lg-draw {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+  }
+}
+
+/* ==================================================================
+   Extra Landing page styles. PASTE AT THE END OF src/index.css
+   (in addition to landing-motion.css; safe if some rules repeat)
+================================================================== */
+.lg-dots {
+  position: absolute;
+  width: 9rem;
+  height: 7rem;
+  background-image: radial-gradient(rgb(16 163 111 / 0.35) 1.5px, transparent 1.7px);
+  background-size: 18px 18px;
+}
+.dark .lg-dots { opacity: 0.3; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .lg-kenburns { animation: lg-kenburns 22s ease-in-out infinite alternate; }
+  @keyframes lg-kenburns { from { transform: scale(1); } to { transform: scale(1.07); } }
+
+  .lg-nudge { animation: lg-nudge 1.8s ease-in-out infinite; }
+  @keyframes lg-nudge {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(5px); }
+  }
+}
+
+.typing-dot-delay-150 { animation-delay: 150ms; }
+.typing-dot-delay-300 { animation-delay: 300ms; }

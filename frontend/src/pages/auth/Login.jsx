@@ -1,25 +1,31 @@
-import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import tagoloanSeal from "../../assets/System_Logo.png";
 import { supabase } from "../../lib/supabase";
 import {
     getCitizenProfile,
     getAuthenticatedProfile,
+    ApiError,
 } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
+import { Pane, focusRingLight } from "./LoginComponents";
+import { CitizenLoginPanel, PersonnelLoginPanel } from "./LoginPanels";
 
-const focusRing =
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2";
+class LoginValidationError extends Error {
+    constructor(message) {
+        super(message);
+        this.name = "LoginValidationError";
+    }
+}
 
-const inputClass =
-    "block min-h-12 w-full rounded-md border border-slate-300 bg-white px-3.5 py-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 hover:border-slate-400 focus:border-emerald-700 focus:ring-4 focus:ring-emerald-700/10";
-
-const benefits = [
-    "Submit complaints with supporting evidence",
-    "Follow every status update in one place",
-    "Hear back from authorized personnel",
-];
+function isDefinitiveLoginRejection(error) {
+    return (
+        error instanceof LoginValidationError ||
+        (error instanceof ApiError &&
+            [401, 403, 404].includes(error.status))
+    );
+}
 
 const personnelRoles = [
     "System Administrator",
@@ -32,10 +38,84 @@ const personnelRoles = [
 const destinations = {
     "System Administrator": "/admin/dashboard",
     "LGU-Staff": "/staff/dashboard",
-    Barangay_Head: "/barangay/dashboard",
-    Department_Head: "/department/dashboard",
-    Department_Personnel: "/personnel/dashboard",
+    "Barangay_Head": "/barangay/dashboard",
+    "Department_Head": "/department/dashboard",
+    "Department_Personnel": "/personnel/dashboard",
 };
+
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function logAuthTiming(label, startedAt) {
+    if (import.meta.env.DEV) {
+        console.debug(`[auth-timing] ${label}: ${Math.round(performance.now() - startedAt)}ms`);
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Copy
+|--------------------------------------------------------------------------
+| The same wording is used everywhere: "sign in" (never "log in"),
+| "Citizen" and "LGU personnel" for the two account types.
+*/
+
+const panelCopy = {
+    citizen: {
+        headline: "Your concerns, handled in the open.",
+        description:
+            "Sign in to send a complaint to the Municipality of Tagoloan and follow it from submission to resolution.",
+        benefits: [
+            "Submit complaints with supporting evidence",
+            "Follow every status update in one place",
+            "Hear back from authorized personnel",
+        ],
+    },
+    personnel: {
+        headline: "Manage and resolve citizen complaints.",
+        description:
+            "A secure workspace for authorized personnel of the Municipality of Tagoloan.",
+        benefits: [
+            "Review and assign incoming complaints",
+            "Update status and respond to citizens",
+            "Monitor resolution progress",
+        ],
+    },
+};
+
+
+
+/*
+|--------------------------------------------------------------------------
+| Helpers
+|--------------------------------------------------------------------------
+*/
+
+/* Turns technical auth errors into plain language with a next step. */
+function friendlyAuthError(error, fallback) {
+    const message = (error?.message || "").toLowerCase();
+
+    if (
+        (typeof navigator !== "undefined" && navigator.onLine  === false) ||
+        message.includes("failed to fetch") ||
+        message.includes("network")
+    ) {
+        return "We can't reach the server. Check your internet connection and try again.";
+    }
+
+    if (message.includes("invalid login credentials")) {
+        return "The email or password is incorrect. Check both and try again. If you have not created your password yet, ask your administrator to send a new invitation.";
+    }
+
+    if (message.includes("email not confirmed")) {
+        return "This email address has not been confirmed yet. Contact your System Administrator.";
+    }
+
+    if (message.includes("rate limit") || message.includes("too many")) {
+        return "Too many attempts. Wait a few minutes before trying again.";
+    }
+
+    return error?.message || fallback;
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -43,101 +123,77 @@ const destinations = {
 |--------------------------------------------------------------------------
 */
 
-function Spinner({ className = "h-4 w-4" }) {
-    return (
-        <svg
-            viewBox="0 0 24 24"
-            className={`${className} animate-spin motion-reduce:animate-none`}
-            fill="none"
-            aria-hidden="true"
-        >
-            <circle
-                cx="12"
-                cy="12"
-                r="9"
-                stroke="currentColor"
-                strokeWidth="3"
-                className="opacity-25"
-            />
-
-            <path
-                d="M21 12a9 9 0 0 0-9-9"
-                stroke="currentColor"
-                strokeWidth="3"
-                strokeLinecap="round"
-            />
-        </svg>
-    );
-}
-
-function Field({ id, label, children }) {
-    return (
-        <div>
-            <label
-                htmlFor={id}
-                className="mb-1.5 block text-sm font-medium text-slate-800"
-            >
-                {label}
-            </label>
-
-            {children}
-        </div>
-    );
-}
-
-function PasswordInput({
-    id,
-    value,
-    onChange,
-    placeholder,
-    autoComplete,
-    disabled,
-}) {
-    const [visible, setVisible] = useState(false);
-
-    return (
-        <div className="relative">
-            <input
-                id={id}
-                type={visible ? "text" : "password"}
-                placeholder={placeholder}
-                value={value}
-                onChange={onChange}
-                autoComplete={autoComplete}
-                required
-                disabled={disabled}
-                className={`${inputClass} pr-16 disabled:cursor-not-allowed disabled:bg-slate-100`}
-            />
-
-            <button
-                type="button"
-                onClick={() => setVisible((current) => !current)}
-                aria-label={visible ? "Hide password" : "Show password"}
-                aria-pressed={visible}
-                disabled={disabled}
-                className={`absolute inset-y-0 right-0 my-1.5 mr-1.5 rounded px-3 text-xs font-semibold text-slate-500 transition-colors hover:text-emerald-800 disabled:opacity-50 ${focusRing}`}
-            >
-                {visible ? "Hide" : "Show"}
-            </button>
-        </div>
-    );
-}
-
 /*
 |--------------------------------------------------------------------------
 | Login Page
 |--------------------------------------------------------------------------
+| /login            -> citizen (Google)
+| /login?as=staff   -> LGU personnel (email and password)
 */
 
 function Login() {
     const navigate = useNavigate();
-    const { refreshProfile } = useAuth();
+    const {
+        beginLoginProfileResolution,
+        setValidatedLoginProfile,
+        cancelLoginProfileResolution,
+    } = useAuth();
+    const [searchParams, setSearchParams] = useSearchParams();
+
+    const mode = searchParams.get("as") === "staff" ? "personnel" : "citizen";
+    const isPersonnel = mode === "personnel";
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [errors, setErrors] = useState({});
     const [notice, setNotice] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
     const [activeAction, setActiveAction] = useState(null);
+
+    const googleButtonRef = useRef(null);
+    const emailRef = useRef(null);
+    const passwordRef = useRef(null);
+    const firstRender = useRef(true);
+    const authAttemptStartedAt = useRef(null);
+    const googleCallbackPromise = useRef(null);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Switching between citizen and personnel
+    |--------------------------------------------------------------------------
+    */
+
+    function switchTo(next) {
+        if (isLoading || next === mode) {
+            return;
+        }
+
+        setNotice(null);
+        setErrors({});
+        setPassword("");
+        setSearchParams(next === "personnel" ? { as: "staff" } : {});
+    }
+
+    // Move focus to the first control once the slide has finished.
+    useEffect(() => {
+        if (firstRender.current) {
+            firstRender.current = false;
+            return;
+        }
+
+        const reduceMotion = window.matchMedia(
+            "(prefers-reduced-motion: reduce)"
+        ).matches;
+
+        const timer = setTimeout(
+            () => {
+                (isPersonnel ? emailRef : googleButtonRef).current?.focus();
+            },
+            reduceMotion ? 0 : 500
+        );
+
+        return () => clearTimeout(timer);
+    }, [isPersonnel]);
 
     /*
     |--------------------------------------------------------------------------
@@ -146,69 +202,118 @@ function Login() {
     */
 
     const finishLogin = useCallback(
-        async (expectedAccountType) => {
-            const result =
-                expectedAccountType === "citizen"
-                    ? await getCitizenProfile()
-                    : await getAuthenticatedProfile();
+        async (expectedAccountType, authenticatedUser) => {
+            const finishStartedAt = performance.now();
 
-            if (!result?.profile) {
-                throw new Error(
-                    "Your user profile could not be retrieved."
-                );
-            }
+            try {
+                const profileStartedAt = performance.now();
+                const result =
+                    expectedAccountType === "citizen"
+                        ? await getCitizenProfile()
+                        : await getAuthenticatedProfile();
+                logAuthTiming("first backend-validated profile retrieval", profileStartedAt);
 
-            const profile = result.profile;
-            const role = profile.role;
-
-            if (
-                expectedAccountType === "citizen" &&
-                role !== "citizen"
-            ) {
-                throw new Error(
-                    "This account is not registered as a citizen account."
-                );
-            }
-
-            if (
-                expectedAccountType === "personnel" &&
-                !personnelRoles.includes(role)
-            ) {
-                throw new Error(
-                    "This account is not authorized for personnel access."
-                );
-            }
-
-            await refreshProfile();
-
-            // Citizen navigation.
-            if (role === "citizen") {
-                if (
-                    result.requires_onboarding ||
-                    !profile.barangay_id
-                ) {
-                    navigate("/onboarding", { replace: true });
-                } else {
-                    navigate("/citizen/dashboard", {
-                        replace: true,
-                    });
+                if (!result?.profile) {
+                    throw new LoginValidationError(
+                        "Your user profile could not be retrieved."
+                    );
                 }
 
-                return;
-            }
+                const profile = result.profile;
+                const role = profile.role;
 
-            // Personnel navigation.
-            const destination = destinations[role];
+                if (
+                    expectedAccountType === "citizen" &&
+                    role !== "citizen"
+                ) {
+                    throw new LoginValidationError(
+                        "This is an LGU personnel account. Switch to LGU personnel sign in."
+                    );
+                }
 
-            if (!destination) {
-                throw new Error(
-                    "Your account has an unrecognized role."
+                if (
+                    expectedAccountType === "personnel" &&
+                    !personnelRoles.includes(role)
+                ) {
+                    throw new LoginValidationError(
+                        "This is a citizen account. Switch to Citizen sign in and use Google."
+                    );
+                }
+
+                const destination =
+                    role === "citizen" ? null : destinations[role];
+                if (role !== "citizen" && !destination) {
+                    throw new LoginValidationError(
+                        "Your account has an unrecognized role."
+                    );
+                }
+
+                try {
+                    setValidatedLoginProfile(profile, authenticatedUser);
+                } catch (error) {
+                    throw new LoginValidationError(error.message);
+                }
+
+                setNotice({
+                    type: "success",
+                    text: "Signed in. Taking you to your dashboard...",
+                });
+
+                // Citizen navigation.
+                if (role === "citizen") {
+                    if (
+                        result.requires_onboarding ||
+                        !profile.barangay_id
+                    ) {
+                        navigate("/onboarding", { replace: true });
+                    } else {
+                        navigate("/citizen/dashboard", {
+                            replace: true,
+                        });
+                    }
+
+                    logAuthTiming(
+                        "login to dashboard navigation",
+                        authAttemptStartedAt.current ?? finishStartedAt
+                    );
+                    return;
+                }
+
+                // Personnel navigation.
+                navigate(destination, { replace: true });
+                logAuthTiming(
+                    "login to dashboard navigation",
+                    authAttemptStartedAt.current ?? finishStartedAt
                 );
-            }
+            } catch (error) {
+                const definitiveRejection = isDefinitiveLoginRejection(error);
+                if (definitiveRejection) {
+                    try {
+                        const { error: signOutError } =
+                            await supabase.auth.signOut({ scope: "local" });
+                        if (signOutError) {
+                            console.error(
+                                "Failed to clear the rejected local login session:",
+                                signOutError.message
+                            );
+                        }
+                    } catch (signOutError) {
+                        console.error(
+                            "Failed to clear the rejected local login session:",
+                            signOutError?.message || "Unexpected sign-out error."
+                        );
+                    }
+                }
 
-            navigate(destination, { replace: true });
+                await cancelLoginProfileResolution({
+                    restoreSession: !definitiveRejection,
+                }).catch((resolutionError) => {
+                    console.error("Failed to restore authentication state after login error:", resolutionError);
+                });
+                throw error;
+            }
         },
-        [navigate, refreshProfile]
+        [navigate, setValidatedLoginProfile, cancelLoginProfileResolution]
     );
 
     /*
@@ -229,13 +334,21 @@ function Login() {
 
         async function verifyGoogleLogin() {
             try {
+                authAttemptStartedAt.current = performance.now();
+                beginLoginProfileResolution();
                 setIsLoading(true);
                 setActiveAction("google");
+
+                setNotice({
+                    type: "info",
+                    text: "Checking your Google sign in...",
+                });
 
                 const {
                     data: { session },
                     error,
                 } = await supabase.auth.getSession();
+                logAuthTiming("OAuth callback session retrieval", authAttemptStartedAt.current);
 
                 if (error) {
                     throw error;
@@ -243,40 +356,49 @@ function Login() {
 
                 if (!session?.access_token) {
                     throw new Error(
-                        "Google login was not completed."
+                        "Google sign in was not completed. Please try again."
                     );
                 }
 
-                await finishLogin("citizen");
+                await finishLogin("citizen", session.user);
+                return null;
             } catch (error) {
-                if (active) {
-                    setNotice({
-                        type: "error",
-                        text:
-                            error.message ||
-                            "Unable to verify your citizen account.",
-                    });
-                }
-            } finally {
-                if (active) {
-                    setIsLoading(false);
-                    setActiveAction(null);
+                await cancelLoginProfileResolution().catch((resolutionError) => {
+                    console.error("Failed to restore authentication state after OAuth error:", resolutionError);
+                });
 
-                    window.history.replaceState(
-                        {},
-                        "",
-                        "/login"
-                    );
-                }
+                return error;
+            } finally {
+                window.history.replaceState({}, "", "/login");
             }
         }
 
-        void verifyGoogleLogin();
+        // Share one callback run across StrictMode's setup/cleanup/setup replay.
+        if (!googleCallbackPromise.current) {
+            googleCallbackPromise.current = verifyGoogleLogin();
+        }
+
+        void googleCallbackPromise.current.then((error) => {
+            if (active && error) {
+                setNotice({
+                    type: "error",
+                    text: friendlyAuthError(
+                        error,
+                        "Unable to verify your citizen account."
+                    ),
+                });
+            }
+
+            if (active) {
+                setIsLoading(false);
+                setActiveAction(null);
+            }
+        });
 
         return () => {
             active = false;
         };
-    }, [finishLogin]);
+    }, [beginLoginProfileResolution, cancelLoginProfileResolution, finishLogin]);
 
     /*
     |--------------------------------------------------------------------------
@@ -294,7 +416,7 @@ function Login() {
 
         setNotice({
             type: "info",
-            text: "Connecting to Google...",
+            text: "Opening Google sign in...",
         });
 
         try {
@@ -315,9 +437,10 @@ function Login() {
         } catch (error) {
             setNotice({
                 type: "error",
-                text:
-                    error.message ||
-                    "Unable to sign in with Google.",
+                text: friendlyAuthError(
+                    error,
+                    "Unable to sign in with Google. Please try again."
+                ),
             });
 
             setIsLoading(false);
@@ -331,6 +454,32 @@ function Login() {
     |--------------------------------------------------------------------------
     */
 
+    function validateCredentials() {
+        const next = {};
+        const normalizedEmail = email.trim();
+
+        if (!normalizedEmail) {
+            next.email = "Enter your email address.";
+        } else if (!emailPattern.test(normalizedEmail)) {
+            next.email =
+                "Enter a valid email address, for example name@example.com.";
+        }
+
+        if (!password) {
+            next.password = "Enter your password.";
+        }
+
+        setErrors(next);
+
+        if (next.email) {
+            emailRef.current?.focus();
+        } else if (next.password) {
+            passwordRef.current?.focus();
+        }
+
+        return Object.keys(next).length === 0;
+    }
+
     async function handleSubmit(event) {
         event.preventDefault();
 
@@ -338,99 +487,44 @@ function Login() {
             return;
         }
 
-        const normalizedEmail = email.trim().toLowerCase();
+        setNotice(null);
 
-        if (!normalizedEmail || !password) {
-            setNotice({
-                type: "error",
-                text:
-                    "Please enter your email address and password.",
-            });
-
+        if (!validateCredentials()) {
             return;
         }
 
-        setNotice(null);
         setIsLoading(true);
         setActiveAction("login");
+        authAttemptStartedAt.current = performance.now();
+        beginLoginProfileResolution();
 
         try {
-            const { error } =
-                await supabase.auth.signInWithPassword({
-                    email: normalizedEmail,
+            const { data, error } = await supabase.auth.signInWithPassword({
+                    email: email.trim().toLowerCase(),
                     password,
                 });
+            logAuthTiming("Supabase password sign-in", authAttemptStartedAt.current);
 
             if (error) {
                 throw error;
             }
 
-            await finishLogin("personnel");
+            await finishLogin("personnel", data.user);
         } catch (error) {
+            await cancelLoginProfileResolution().catch((resolutionError) => {
+                console.error("Failed to restore authentication state after login error:", resolutionError);
+            });
+
             setNotice({
                 type: "error",
-                text:
-                    error.message ||
-                    "Authentication failed. Please try again.",
-            });
-        } finally {
-            setIsLoading(false);
-            setActiveAction(null);
-        }
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Password Reset
-    |--------------------------------------------------------------------------
-    */
-
-    async function handleForgotPassword() {
-        if (isLoading) {
-            return;
-        }
-
-        const normalizedEmail = email.trim().toLowerCase();
-
-        if (!normalizedEmail) {
-            setNotice({
-                type: "info",
-                text:
-                    "Enter your email address first to reset your password.",
+                text: friendlyAuthError(
+                    error,
+                    "Sign in failed. Please try again."
+                ),
             });
 
-            return;
-        }
-
-        setNotice(null);
-        setIsLoading(true);
-        setActiveAction("reset");
-
-        try {
-            const { error } =
-                await supabase.auth.resetPasswordForEmail(
-                    normalizedEmail,
-                    {
-                        redirectTo: `${window.location.origin}/set-password`,
-                    }
-                );
-
-            if (error) {
-                throw error;
-            }
-
-            setNotice({
-                type: "info",
-                text:
-                    "If an account exists for that email, a password reset link will be sent.",
-            });
-        } catch (error) {
-            setNotice({
-                type: "error",
-                text:
-                    error.message ||
-                    "Unable to request a password reset.",
-            });
+            setPassword("");
+            passwordRef.current?.focus();
         } finally {
             setIsLoading(false);
             setActiveAction(null);
@@ -444,280 +538,163 @@ function Login() {
     */
 
     return (
-        <div className="grid min-h-screen bg-white font-sans text-slate-900 antialiased lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
-            <aside className="relative hidden flex-col justify-between overflow-hidden bg-emerald-950 p-12 text-white lg:flex xl:p-16">
+        <div className="app-bg relative min-h-screen overflow-hidden font-sans text-slate-900 antialiased">
+            {/* Skip link for keyboard users */}
+            <a
+                href={isPersonnel ? "#personnel-signin" : "#citizen-signin"}
+                className="sr-only z-50 rounded-md bg-white px-4 py-3 text-sm font-semibold text-emerald-900 shadow-lg focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:ring-2 focus:ring-emerald-700"
+            >
+                Skip to sign in form
+            </a>
+
+            {/* Announces the active form to screen reader users */}
+            <p className="sr-only" role="status" aria-live="polite">
+                {isPersonnel
+                    ? "LGU personnel sign in form shown"
+                    : "Citizen sign in form shown"}
+            </p>
+
+            {/* ---------- Citizen form (left half) ---------- */}
+            <CitizenLoginPanel
+              mode={mode}
+              isPersonnel={isPersonnel}
+              isLoading={isLoading}
+              switchTo={switchTo}
+              notice={notice}
+              setNotice={setNotice}
+              googleButtonRef={googleButtonRef}
+              handleGoogleLogin={handleGoogleLogin}
+              activeAction={activeAction}
+            />
+
+            <PersonnelLoginPanel
+              mode={mode}
+              isPersonnel={isPersonnel}
+              isLoading={isLoading}
+              switchTo={switchTo}
+              notice={notice}
+              setNotice={setNotice}
+              activeAction={activeAction}
+              handleSubmit={handleSubmit}
+              errors={errors}
+              emailRef={emailRef}
+              email={email}
+              setEmail={setEmail}
+              setErrors={setErrors}
+              passwordRef={passwordRef}
+              password={password}
+              setPassword={setPassword}
+            />
+
+            {/* ---------- Sliding side panel (large screens only) ---------- */}
+            <aside
+                aria-label="About BantaySerbisyo"
+                className={`absolute inset-y-0 left-0 z-10 hidden w-1/2 overflow-hidden bg-emerald-950 text-white transition-transform duration-700 ease-in-out motion-reduce:transition-none lg:block ${
+                    isPersonnel
+                        ? "translate-x-0"
+                        : "translate-x-full"
+                }`}
+            >
+                {/* Municipal hall photo with a deep green wash */}
+                <img
+                    src="/tagoloan-hall.jpg"
+                    alt=""
+                    aria-hidden="true"
+                    className="absolute inset-0 h-full w-full object-cover object-[50%_40%]"
+                />
+                <div
+                    aria-hidden="true"
+                    className="absolute inset-0 bg-gradient-to-br from-emerald-950/90 via-emerald-900/80 to-emerald-700/60"
+                />
+
                 <div
                     aria-hidden="true"
                     className="pointer-events-none absolute -right-32 -bottom-32 h-[28rem] w-[28rem] rounded-full border border-white/10"
                 />
-
                 <div
                     aria-hidden="true"
                     className="pointer-events-none absolute -right-12 -bottom-12 h-[18rem] w-[18rem] rounded-full border border-white/10"
                 />
 
-                <Link
-                    to="/"
-                    className={`relative flex w-fit items-center gap-3 rounded-md focus-visible:ring-white focus-visible:ring-offset-emerald-950 ${focusRing}`}
-                    aria-label="BantaySerbisyo home"
-                >
-                    <img
-                        src={tagoloanSeal}
-                        alt="Official Seal of Tagoloan"
-                        className="h-11 w-11 object-contain"
-                    />
-
-                    <span className="text-xl font-bold tracking-tight">
-                        Bantay
-                        <span className="font-semibold text-emerald-300">
-                            Serbisyo
-                        </span>
-                    </span>
-                </Link>
-
-                <div className="relative max-w-md">
-                    <h2 className="text-3xl leading-tight font-semibold tracking-tight xl:text-4xl">
-                        Your concerns, handled in the open.
-                    </h2>
-
-                    <p className="mt-4 text-base leading-7 text-emerald-100/80">
-                        Log in to send a complaint to the Municipality
-                        of Tagoloan and watch it move from submission
-                        to resolution.
-                    </p>
-
-                    <ul className="mt-9 space-y-4">
-                        {benefits.map((item) => (
-                            <li
-                                key={item}
-                                className="flex items-start gap-3 text-sm leading-6 text-emerald-50"
-                            >
-                                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-400/20 text-emerald-300">
-                                    <svg
-                                        viewBox="0 0 24 24"
-                                        className="h-3 w-3"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="3"
-                                        aria-hidden="true"
-                                    >
-                                        <path
-                                            d="m5 12.5 4.5 4.5L19 7.5"
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                        />
-                                    </svg>
-                                </span>
-
-                                {item}
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-
-                <p className="relative text-xs text-emerald-100/60">
-                    Municipality of Tagoloan
-                </p>
-            </aside>
-
-            <div className="flex min-h-screen flex-col">
-                <header className="flex items-center justify-between gap-4 px-6 py-5 sm:px-10">
+                <div className="relative flex h-full flex-col justify-between p-12 xl:p-16">
                     <Link
                         to="/"
-                        className={`flex items-center gap-2.5 rounded-md lg:invisible ${focusRing}`}
+                        className={`flex w-fit items-center gap-3 rounded-md ${focusRingLight}`}
                         aria-label="BantaySerbisyo home"
                     >
                         <img
                             src={tagoloanSeal}
                             alt="Official Seal of Tagoloan"
-                            className="h-9 w-9 object-contain"
+                            className="h-11 w-11 object-contain"
                         />
-
-                        <span className="text-lg font-bold tracking-tight">
+                        <span className="text-xl font-bold tracking-tight">
                             Bantay
-                            <span className="font-semibold text-emerald-800">
+                            <span className="font-semibold text-emerald-300">
                                 Serbisyo
                             </span>
                         </span>
                     </Link>
 
-                    <Link
-                        to="/"
-                        className={`rounded-md px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 ${focusRing}`}
-                    >
-                        Back to home
-                    </Link>
-                </header>
+                    <div className="grid max-w-md">
+                        {Object.entries(panelCopy).map(([key, copy]) => {
+                            const active = key === mode;
 
-                <main className="flex flex-1 items-center justify-center px-6 pt-4 pb-12 sm:px-10">
-                    <section
-                        className="w-full max-w-md"
-                        aria-labelledby="auth-title"
-                    >
-                        <h1
-                            id="auth-title"
-                            className="text-3xl font-semibold tracking-tight text-slate-900"
-                        >
-                            Welcome to BantaySerbisyo
-                        </h1>
-
-                        <p className="mt-2 text-sm leading-6 text-slate-600">
-                            Sign in to access your account and continue.
-                        </p>
-
-                        {notice && (
-                            <div
-                                role={
-                                    notice.type === "error"
-                                        ? "alert"
-                                        : "status"
-                                }
-                                className={`mt-6 flex items-start gap-3 rounded-md border px-4 py-3 text-sm leading-6 ${
-                                    notice.type === "error"
-                                        ? "border-red-200 bg-red-50 text-red-800"
-                                        : "border-emerald-200 bg-emerald-50 text-emerald-900"
-                                }`}
-                            >
-                                <p className="flex-1">{notice.text}</p>
-
-                                <button
-                                    type="button"
-                                    onClick={() => setNotice(null)}
-                                    aria-label="Dismiss message"
-                                    className={`-mr-1 rounded p-0.5 opacity-60 transition-opacity hover:opacity-100 ${focusRing}`}
+                            return (
+                                <Pane
+                                    key={key}
+                                    active={active}
+                                    className={`col-start-1 row-start-1 transition-opacity duration-500 motion-reduce:transition-none ${
+                                        active
+                                            ? "opacity-100 delay-300"
+                                            : "pointer-events-none opacity-0"
+                                    }`}
                                 >
-                                    <span aria-hidden="true">×</span>
-                                </button>
-                            </div>
-                        )}
+                                    <p className="text-3xl leading-tight font-semibold tracking-tight xl:text-4xl">
+                                        {copy.headline}
+                                    </p>
 
-                        <button
-                            type="button"
-                            onClick={handleGoogleLogin}
-                            disabled={isLoading}
-                            aria-busy={activeAction === "google"}
-                            className={`mt-8 flex min-h-12 w-full items-center justify-center gap-3 rounded-md border border-slate-300 bg-white text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 ${focusRing}`}
-                        >
-                            {activeAction === "google" ? (
-                                <Spinner className="h-5 w-5 shrink-0 text-emerald-800" />
-                            ) : (
-                                <svg
-                                    className="h-5 w-5 shrink-0"
-                                    viewBox="0 0 48 48"
-                                    aria-hidden="true"
-                                >
-                                    <path
-                                        fill="#4285F4"
-                                        d="M43.6 24.5c0-1.4-.1-2.8-.4-4.1H24v7.8h11a9.4 9.4 0 0 1-4.1 6.2v5.1h6.7c3.9-3.6 6-8.9 6-15z"
-                                    />
-                                    <path
-                                        fill="#34A853"
-                                        d="M24 44c5.5 0 10.1-1.8 13.5-4.8l-6.7-5.1c-1.8 1.2-4.1 2-6.8 2-5.3 0-9.8-3.6-11.4-8.4H5.7v5.3A20 20 0 0 0 24 44z"
-                                    />
-                                    <path
-                                        fill="#FBBC05"
-                                        d="M12.6 27.7a12 12 0 0 1 0-7.4V15H5.7a20 20 0 0 0 0 18z"
-                                    />
-                                    <path
-                                        fill="#EA4335"
-                                        d="M24 11.9c3 0 5.7 1 7.8 3.1l5.8-5.8A19.5 19.5 0 0 0 24 4 20 20 0 0 0 5.7 15l6.9 5.3c1.6-4.8 6.1-8.4 11.4-8.4z"
-                                    />
-                                </svg>
-                            )}
+                                    <p className="mt-4 text-base leading-7 text-emerald-100/90">
+                                        {copy.description}
+                                    </p>
 
-                            {activeAction === "google"
-                                ? "Please wait..."
-                                : "Continue with Google"}
-                        </button>
+                                    <div className="mt-8 rounded-3xl border border-white/20 bg-white/10 p-6 backdrop-blur-xl">
+                                        <ul className="space-y-4">
+                                            {copy.benefits.map((item) => (
+                                                <li
+                                                    key={item}
+                                                    className="flex items-start gap-3 text-sm leading-6 text-emerald-50"
+                                                >
+                                                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-400/20 text-emerald-300">
+                                                        <svg
+                                                            viewBox="0 0 24 24"
+                                                            className="h-3 w-3"
+                                                            fill="none"
+                                                            stroke="currentColor"
+                                                            strokeWidth="3"
+                                                            aria-hidden="true"
+                                                        >
+                                                            <path
+                                                                d="m5 12.5 4.5 4.5L19 7.5"
+                                                                strokeLinecap="round"
+                                                                strokeLinejoin="round"
+                                                            />
+                                                        </svg>
+                                                    </span>
+                                                    {item}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                </Pane>
+                            );
+                        })}
+                    </div>
 
-                        <div className="my-7 flex items-center gap-4 text-xs text-slate-500">
-                            <span className="h-px flex-1 bg-slate-200" />
-                            OR
-                            <span className="h-px flex-1 bg-slate-200" />
-                        </div>
-
-                        <p className="mb-5 text-sm font-medium text-slate-700">
-                            LGU Personnel / Administrator
-                        </p>
-
-                        <form
-                            onSubmit={handleSubmit}
-                            className="space-y-5"
-                        >
-                            <Field
-                                id="email"
-                                label="Email address"
-                            >
-                                <input
-                                    id="email"
-                                    type="email"
-                                    placeholder="you@example.com"
-                                    value={email}
-                                    onChange={(event) =>
-                                        setEmail(event.target.value)
-                                    }
-                                    autoComplete="username"
-                                    required
-                                    disabled={isLoading}
-                                    className={inputClass}
-                                />
-                            </Field>
-
-                            <Field
-                                id="password"
-                                label="Password"
-                            >
-                                <PasswordInput
-                                    id="password"
-                                    value={password}
-                                    onChange={(event) =>
-                                        setPassword(event.target.value)
-                                    }
-                                    placeholder="Enter your password"
-                                    autoComplete="current-password"
-                                    disabled={isLoading}
-                                />
-                            </Field>
-
-                            <div className="flex justify-end text-sm">
-                                <button
-                                    type="button"
-                                    onClick={handleForgotPassword}
-                                    disabled={isLoading}
-                                    className={`rounded font-semibold text-emerald-800 hover:underline disabled:opacity-50 ${focusRing}`}
-                                >
-                                    {activeAction === "reset"
-                                        ? "Sending link..."
-                                        : "Forgot password?"}
-                                </button>
-                            </div>
-
-                            <button
-                                type="submit"
-                                disabled={isLoading}
-                                aria-busy={activeAction === "login"}
-                                className={`flex min-h-12 w-full items-center justify-center gap-2 rounded-md bg-emerald-800 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-900 disabled:cursor-not-allowed disabled:opacity-60 ${focusRing}`}
-                            >
-                                {activeAction === "login" && <Spinner />}
-
-                                {activeAction === "login"
-                                    ? "Please wait..."
-                                    : "Log in"}
-                            </button>
-                        </form>
-
-                        <p className="mt-8 text-center text-xs leading-6 text-slate-500">
-                            Internal accounts are created and managed by
-                            the System Administrator.
-                        </p>
-                    </section>
-                </main>
-
-                <footer className="px-6 py-6 text-center text-xs text-slate-500 sm:px-10">
-                    © {new Date().getFullYear()} BantaySerbisyo ·
-                    Municipality of Tagoloan
-                </footer>
-            </div>
+                    <p className="text-sm text-emerald-100/80">
+                        Municipality of Tagoloan
+                    </p>
+                </div>
+            </aside>
         </div>
     );
 }

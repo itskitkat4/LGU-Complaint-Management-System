@@ -20,7 +20,7 @@ class CheckRole
             ], 401);
         }
 
-         $profile = Profile::find($user['id']);
+        $profile = $request->attributes->get('profile');
 
         if (!$profile || !in_array($profile->role, $roles, true)) {
             return response()->json([

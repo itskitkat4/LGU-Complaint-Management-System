@@ -34,33 +34,37 @@ export default function Landing() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white p-6 sm:p-8">
-            <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-emerald-800 text-white">
-              <Icon name="megaphone" className="h-6 w-6" />
-            </span>
-            <h2 className="mt-5 text-xl font-semibold tracking-tight text-slate-900">
-              Report. Track. Improve.
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              Keep your complaint information organized and check its progress through
-              the system.
-            </p>
+          <div className="glass relative overflow-hidden rounded-3xl p-6 sm:p-8">
+            <div aria-hidden="true" className="pointer-events-none absolute -right-16 -top-20 h-72 w-72 rounded-full bg-emerald-300/30 blur-3xl" />
 
-            <div className="mt-6 grid gap-3 border-t border-slate-100 pt-6 sm:grid-cols-2">
-              {highlights.map((item) => (
-                <div
-                  key={item.title}
-                  className="flex items-start gap-3 rounded-lg bg-slate-50 p-4"
-                >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800">
-                    <Icon name={item.icon} className="h-[18px] w-[18px]" />
-                  </span>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">{item.title}</p>
-                    <p className="mt-0.5 text-xs text-slate-500">{item.text}</p>
+            <div className="relative">
+              <span className="glass-icon flex h-12 w-12 items-center justify-center rounded-2xl">
+                <Icon name="megaphone" className="h-6 w-6" />
+              </span>
+              <h2 className="mt-5 text-xl font-semibold tracking-tight text-slate-900">
+                Report. Track. Improve.
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Keep your complaint information organized and check its progress through
+                the system.
+              </p>
+
+              <div className="mt-6 grid gap-3 border-t border-slate-100 pt-6 sm:grid-cols-2">
+                {highlights.map((item) => (
+                  <div
+                    key={item.title}
+                    className="glass-soft flex items-start gap-3 rounded-2xl p-4"
+                  >
+                    <span className="glass-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl">
+                      <Icon name={item.icon} className="h-[18px] w-[18px]" />
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">{item.title}</p>
+                      <p className="mt-0.5 text-xs text-slate-500">{item.text}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
         </div>

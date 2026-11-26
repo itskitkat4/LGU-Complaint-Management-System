@@ -55,7 +55,6 @@ class SupabaseStorageService
         }
 
         $response = Http::withHeaders([
-            'Authorization' => 'Bearer ' . $secretKey,
             'apikey' => $secretKey,
             'Content-Type' => $mimeType,
             'x-upsert' => 'false',
@@ -102,7 +101,6 @@ class SupabaseStorageService
         $encodedPath = $this->encodePath($path);
 
         $response = Http::withHeaders([
-            'Authorization' => 'Bearer ' . $secretKey,
             'apikey' => $secretKey,
         ])->delete(
             "{$baseUrl}/storage/v1/object/{$encodedBucket}/{$encodedPath}"
@@ -152,7 +150,6 @@ class SupabaseStorageService
         $encodedPath = $this->encodePath($path);
 
         $response = Http::withHeaders([
-            'Authorization' => 'Bearer ' . $secretKey,
             'apikey' => $secretKey,
         ])->post(
             "{$baseUrl}/storage/v1/object/sign/{$encodedBucket}/{$encodedPath}",

@@ -20,12 +20,6 @@ export const navigation = [
         path: "/citizen/complaints/new",
     },
     {
-        label: "Notifications",
-        short: "Notifications",
-        icon: "bell",
-        path: "/citizen/notifications",
-    },
-    {
         label: "My Feedback",
         short: "Feedback",
         icon: "message",
@@ -167,7 +161,7 @@ export function Icon({ name, className = "h-5 w-5" }) {
 export function Logo() {
     return (
         <span className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-800 text-white">
+            <span className="glass-icon flex h-10 w-10 items-center justify-center rounded-xl">
                 <Icon name="shield" />
             </span>
 
@@ -186,18 +180,25 @@ export function Logo() {
 
 export function Panel({ title, description, action, children }) {
     return (
-        <section className="rounded-xl border border-slate-200 bg-white">
+        <section className="glass rounded-2xl">
             <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
-                <div>
-                    <h2 className="text-base font-semibold text-slate-900">
-                        {title}
-                    </h2>
+                <div className="flex items-start gap-3">
+                    <span
+                        className="mt-0.5 h-9 w-1 shrink-0 rounded-full bg-emerald-500"
+                        aria-hidden="true"
+                    />
 
-                    {description && (
-                        <p className="mt-1 text-sm text-slate-500">
-                            {description}
-                        </p>
-                    )}
+                    <div>
+                        <h2 className="text-base font-semibold text-slate-900">
+                            {title}
+                        </h2>
+
+                        {description && (
+                            <p className="mt-1 text-sm text-slate-500">
+                                {description}
+                            </p>
+                        )}
+                    </div>
                 </div>
 
                 {action}

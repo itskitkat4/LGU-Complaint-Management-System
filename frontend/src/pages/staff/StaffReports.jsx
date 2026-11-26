@@ -1,17 +1,12 @@
-
 import { useEffect, useState } from "react";
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
 import StaffLayout from "../../layouts/StaffLayout";
-import {
-  getStaffReports,
-  createStaffReport,
-  uploadStaffReportPdf,
-} from "../../lib/api";
+import { ContentSkeleton } from "../../components/Skeletons";
+import PercentageBar from "../../components/PercentageBar";
+import { getStaffReports, createStaffReport, uploadStaffReportPdf, } from "../../lib/api";
 
 function SummaryCard({ label, value, color }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="glass rounded-2xl p-5">
       <p className="text-sm font-medium text-slate-500">{label}</p>
       <p className={`mt-2 text-3xl font-bold ${color}`}>
         {value ?? 0}
@@ -28,15 +23,45 @@ function getLocalDateString(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
-function downloadReportsPDF(report, dateFrom, dateTo) {
-  if (!report) return null;
+function isValidReports(value) {
+  const summaryKeys = ["total", "pending", "in_progress", "resolved"];
+  return value?.summary &&
+    summaryKeys.every((key) =>
+      Number.isInteger(value.summary[key]) && value.summary[key] >= 0
+    ) &&
+    Array.isArray(value.by_status) &&
+    value.by_status.every((item) =>
+      typeof item.status === "string" &&
+      Number.isInteger(item.total) && item.total >= 0
+    ) &&
+    Array.isArray(value.by_category) &&
+    value.by_category.every((item) =>
+      typeof item.category === "string" &&
+      Number.isInteger(item.total) && item.total >= 0
+    ) &&
+    Array.isArray(value.monthly) &&
+    value.monthly.every((item) =>
+      typeof item.month === "string" &&
+      Number.isInteger(item.received) && item.received >= 0 &&
+      Number.isInteger(item.resolved) && item.resolved >= 0
+    );
+}
 
-  const doc = new jsPDF({
-    orientation: "portrait",
-    unit: "mm",
-    format: "a4",
-  });
+async function downloadReportsPDF(report, dateFrom, dateTo) {
+    if (!report) return null;
 
+    const [{ jsPDF }, { default: autoTable }] = await Promise.all([
+        import("jspdf"),
+        import("jspdf-autotable"),
+    ]);
+
+    const doc = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+    });
+
+    // Keep the remaining existing PDF-generation code unchanged.
   const generatedDate = new Date().toLocaleDateString("en-PH", {
     year: "numeric",
     month: "long",
@@ -163,6 +188,7 @@ export default function StaffReports() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const initialDateFrom = (() => {
     const date = new Date();
@@ -176,8 +202,13 @@ export default function StaffReports() {
 
   useEffect(() => {
     async function loadReports() {
+      setLoading(true);
+      setError("");
       try {
         const data = await getStaffReports();
+        if (!isValidReports(data)) {
+          throw new Error("The reports summary response is incomplete or invalid.");
+        }
         setReports(data);
       } catch (err) {
         setError(err.message || "Unable to load reports.");
@@ -187,7 +218,7 @@ export default function StaffReports() {
     }
 
     loadReports();
-  }, []);
+  }, [refreshKey]);
 
   async function handleGenerateReport() {
     setError("");
@@ -220,7 +251,7 @@ if (!report?.id) {
 }
 
       // Generate PDF document
-      const doc = downloadReportsPDF(report, dateFrom, dateTo);
+      const doc = await downloadReportsPDF(report, dateFrom, dateTo);
 
       if (!doc) {
         throw new Error("Unable to generate PDF document.");
@@ -257,29 +288,35 @@ if (!report?.id) {
       <div className="staff-reports-page space-y-6">
         {/* Header */}
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-          <div>
-            <h2 className="text-xl font-bold text-slate-900">
-              Reports & Analytics
-            </h2>
+          <div className="flex items-start gap-3">
+            <span className="mt-1 h-16 w-1 shrink-0 rounded-full bg-emerald-500" aria-hidden="true" />
+            <div>
+              <h2 className="text-xl font-bold text-slate-900">
+                Reports & Analytics
+              </h2>
 
-            <p className="mt-1 text-sm text-slate-500">
-              Overview of complaints handled by the municipality.
-            </p>
+              <p className="mt-1 text-sm text-slate-500">
+                All-time totals; Pre-assignment groups submitted, under review, and accepted complaints. Monthly activity covers the last six months.
+              </p>
 
-            <p className="mt-1 text-xs text-slate-400">
-              Generated: {new Date().toLocaleDateString()}
-            </p>
+              <p className="mt-1 text-xs text-slate-400">
+                Generated: {new Date().toLocaleDateString()}
+              </p>
+            </div>
           </div>
         </div>
 
         {/* Date Range & Generate Report */}
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <section className="glass rounded-2xl p-5">
           <h3 className="font-semibold text-slate-900">
             Generate Consolidated Report
           </h3>
 
           <p className="mt-1 text-sm text-slate-500">
             Select a date range to generate, upload, and download the PDF report.
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            The date range applies to the generated report only. Summary cards and charts are all-time totals and the latest six months.
           </p>
 
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -298,7 +335,7 @@ if (!report?.id) {
                 max={dateTo || undefined}
                 onChange={(e) => setDateFrom(e.target.value)}
                 disabled={generating}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:outline-none"
+                className="glass-input w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:outline-none"
               />
             </div>
 
@@ -318,7 +355,7 @@ if (!report?.id) {
                 max={getLocalDateString()}
                 onChange={(e) => setDateTo(e.target.value)}
                 disabled={generating}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:outline-none"
+                className="glass-input w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-emerald-600 focus:outline-none"
               />
             </div>
 
@@ -327,7 +364,7 @@ if (!report?.id) {
                 type="button"
                 onClick={handleGenerateReport}
                 disabled={loading || generating || !reports || !!error}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className="glass-btn-primary inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {generating ? (
                   <>
@@ -363,22 +400,20 @@ if (!report?.id) {
 
         {/* Loading */}
         {loading && (
-          <p className="text-sm text-slate-500">
-            Loading reports...
-          </p>
+          <ContentSkeleton label="Loading reports" variant="table" rows={4} />
         )}
 
         {/* Error */}
         {error && (
-          <div className="rounded-lg bg-red-50 p-4 text-sm text-red-700">
+          <div className="rounded-2xl bg-red-50 p-4 text-sm text-red-700">
             <p>{error}</p>
 
             <button
               type="button"
-              onClick={() => setError("")}
+              onClick={() => setRefreshKey((key) => key + 1)}
               className="mt-2 font-semibold underline"
             >
-              Dismiss
+              Retry
             </button>
           </div>
         )}
@@ -389,13 +424,13 @@ if (!report?.id) {
             {/* Summary Cards */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <SummaryCard
-                label="Total Complaints"
+                label="All-time Complaints"
                 value={reports.summary?.total}
                 color="text-slate-900"
               />
 
               <SummaryCard
-                label="Pending"
+                label="Pre-assignment"
                 value={reports.summary?.pending}
                 color="text-amber-600"
               />
@@ -416,13 +451,13 @@ if (!report?.id) {
             {/* Status and Category */}
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               {/* Status */}
-              <section className="rounded-xl border border-slate-200 bg-white p-5">
+              <section className="glass rounded-2xl p-5">
                 <h3 className="font-semibold text-slate-900">
                   Complaints by Status
                 </h3>
 
                 <div className="mt-5 space-y-4">
-                  {reports.by_status?.map((item) => {
+                  {reports.by_status.length ? reports.by_status.map((item) => {
                     const percentage = reports.summary?.total
                       ? (item.total / reports.summary.total) * 100
                       : 0;
@@ -440,19 +475,21 @@ if (!report?.id) {
                         </div>
 
                         <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                          <div
-                            className="h-full rounded-full bg-emerald-600"
-                            style={{ width: `${percentage}%` }}
+                          <PercentageBar
+                            percentage={percentage}
+                            fillClassName="text-emerald-600"
                           />
                         </div>
                       </div>
                     );
-                  })}
+                  }) : (
+                    <p className="text-sm text-slate-500">No complaint records are available.</p>
+                  )}
                 </div>
               </section>
 
               {/* Category */}
-              <section className="rounded-xl border border-slate-200 bg-white p-5">
+              <section className="glass rounded-2xl p-5">
                 <h3 className="font-semibold text-slate-900">
                   Complaints by Category
                 </h3>
@@ -477,10 +514,10 @@ if (!report?.id) {
                           </div>
 
                           <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                            <div
-                              className="h-full rounded-full bg-blue-600"
-                              style={{ width: `${percentage}%` }}
-                            />
+                          <PercentageBar
+                            percentage={percentage}
+                            fillClassName="text-blue-600"
+                          />
                           </div>
                         </div>
                       );
@@ -495,17 +532,17 @@ if (!report?.id) {
             </div>
 
             {/* Monthly Complaints */}
-            <section className="rounded-xl border border-slate-200 bg-white p-5">
+            <section className="glass rounded-2xl p-5">
               <h3 className="font-semibold text-slate-900">
-                Monthly Complaints
+                Monthly Complaints and Approved Resolutions
               </h3>
 
               <p className="mt-1 text-sm text-slate-500">
-                Complaints received versus resolved over the last six months.
+                Complaints grouped by creation month and complaint records with an approved resolution grouped by approval month.
               </p>
 
               <div className="mt-6 space-y-5">
-                {reports.monthly?.map((item) => {
+                {reports.monthly.length ? reports.monthly.map((item) => {
                   const max = Math.max(
                     1,
                     ...reports.monthly.map((month) =>
@@ -527,11 +564,9 @@ if (!report?.id) {
                           </span>
 
                           <div className="h-3 flex-1 rounded-full bg-slate-100">
-                            <div
-                              className="h-3 rounded-full bg-blue-600"
-                              style={{
-                                width: `${(item.received / max) * 100}%`,
-                              }}
+                            <PercentageBar
+                              percentage={(item.received / max) * 100}
+                              fillClassName="text-blue-600"
                             />
                           </div>
 
@@ -542,16 +577,14 @@ if (!report?.id) {
 
                         {/* Resolved */}
                         <div className="flex items-center gap-3">
-                          <span className="w-20 text-xs text-slate-500">
-                            Resolved
+                          <span className="w-28 text-xs text-slate-500">
+                            Approved resolutions
                           </span>
 
                           <div className="h-3 flex-1 rounded-full bg-slate-100">
-                            <div
-                              className="h-3 rounded-full bg-emerald-600"
-                              style={{
-                                width: `${(item.resolved / max) * 100}%`,
-                              }}
+                            <PercentageBar
+                              percentage={(item.resolved / max) * 100}
+                              fillClassName="text-emerald-600"
                             />
                           </div>
 
@@ -562,7 +595,9 @@ if (!report?.id) {
                       </div>
                     </div>
                   );
-                })}
+                }) : (
+                  <p className="text-sm text-slate-500">No monthly data is available.</p>
+                )}
               </div>
             </section>
           </>

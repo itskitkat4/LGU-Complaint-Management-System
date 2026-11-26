@@ -1,13 +1,13 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { supabase } from "../../lib/supabase";
 import {
     getCitizenComplaints,
-    getCitizenProfile,
 } from "../../lib/api";
 
 import CitizenLayout from "../../layouts/CitizenLayout";
+import { useAuth } from "../../context/AuthContext";
 
 import {
     Icon,
@@ -25,28 +25,33 @@ function Skeleton({ className = "" }) {
     );
 }
 
+
+
+
 function StatCard({ label, value, description, icon, tone }) {
     return (
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
-            <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-medium text-slate-600">
-                    {label}
-                </p>
-
+        <div className="glass rounded-2xl p-5">
+            <div className="flex items-center gap-4">
                 <span
-                    className={`flex h-9 w-9 items-center justify-center rounded-lg ${tone}`}
+                    className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${tone}`}
                 >
                     <Icon name={icon} />
                 </span>
+
+                <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-600">
+                        {label}
+                    </p>
+
+                    <p className="mt-1 text-3xl font-semibold text-slate-900">
+                        {value}
+                    </p>
+
+                    <p className="mt-1 text-xs text-slate-500">
+                        {description}
+                    </p>
+                </div>
             </div>
-
-            <p className="mt-4 text-3xl font-semibold text-slate-900">
-                {value}
-            </p>
-
-            <p className="mt-1 text-xs text-slate-500">
-                {description}
-            </p>
         </div>
     );
 }
@@ -74,107 +79,144 @@ function formatStatus(status) {
         .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
+function isComplaintRecord(complaint) {
+    if (
+        typeof complaint !== "object" ||
+        complaint === null ||
+        Array.isArray(complaint) ||
+        typeof complaint.id !== "string" ||
+        complaint.id.trim() === ""
+    ) {
+        return false;
+    }
+
+    if (
+        (complaint.title !== undefined && typeof complaint.title !== "string") ||
+        (complaint.status !== undefined && typeof complaint.status !== "string") ||
+        (complaint.created_at !== undefined &&
+            complaint.created_at !== null &&
+            typeof complaint.created_at !== "string")
+    ) {
+        return false;
+    }
+
+    const category = complaint.category;
+    return (
+        category === undefined ||
+        category === null ||
+        (typeof category === "object" &&
+            !Array.isArray(category) &&
+            (category.name === undefined || typeof category.name === "string"))
+    );
+}
+
 export default function CitizenDashboard() {
     const navigate = useNavigate();
+    const { user, profile: authProfile } = useAuth();
+    const userId = user?.id;
+    const [dashboard, setDashboard] = useState(null);
+    const [error, setError] = useState(null);
+    const [isLoading, setIsLoading] = useState(true);
 
-    const [profile, setProfile] = useState(null);
-    const [complaints, setComplaints] = useState([]);
+    const loadDashboard = useCallback(async () => {
+        const {
+            data: { session },
+            error: sessionError,
+        } = await supabase.auth.getSession();
 
-    const [statistics, setStatistics] = useState({
-        total: 0,
-        pending_review: 0,
-        in_progress: 0,
-        resolved: 0,
-    });
+        if (sessionError) {
+            throw sessionError;
+        }
 
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
+        if (!session?.access_token || !session.user?.id) {
+            navigate("/login", { replace: true });
+            throw new Error("Please sign in first.");
+        }
 
+        if (
+            !userId ||
+            session.user.id !== userId ||
+            authProfile?.id !== userId ||
+            authProfile.role !== "citizen"
+        ) {
+            throw new Error("Your authenticated citizen profile is not ready.");
+        }
+
+        const complaintResult = await getCitizenComplaints();
+        const expectedStatistics = [
+            "total",
+            "pre_assignment",
+            "in_progress",
+            "resolved",
+        ];
+        const resultStatistics = complaintResult?.statistics;
+
+        if (
+            !Array.isArray(complaintResult?.data) ||
+            !complaintResult.pagination ||
+            !Number.isInteger(complaintResult.pagination.total) ||
+            !resultStatistics ||
+            !expectedStatistics.every((key) =>
+                Number.isInteger(resultStatistics[key]) &&
+                resultStatistics[key] >= 0
+            ) ||
+            resultStatistics.total !== complaintResult.pagination.total
+        ) {
+            throw new Error("Your complaint dashboard response is incomplete or invalid.");
+        }
+
+        if (!complaintResult.data.every(isComplaintRecord)) {
+            throw new Error("Your complaint dashboard response contains invalid complaint records.");
+        }
+
+        return {
+            profile: authProfile,
+            complaints: complaintResult.data,
+            statistics: resultStatistics,
+        };
+    }, [navigate, userId, authProfile]);
     useEffect(() => {
         let active = true;
 
-        async function loadDashboard() {
-            try {
-                const {
-                    data: { session },
-                    error: sessionError,
-                } = await supabase.auth.getSession();
-
-                if (sessionError) {
-                    throw sessionError;
-                }
-
-                if (!session?.access_token) {
-                    navigate("/login", { replace: true });
-                    return;
-                }
-
-                const result = await getCitizenProfile();
-
-                if (!result?.profile) {
-                    throw new Error(
-                        "Your citizen profile could not be loaded."
-                    );
-                }
-
-                if (result.profile.role !== "citizen") {
-                    await supabase.auth.signOut();
-                    navigate("/login", { replace: true });
-                    return;
-                }
-
+        loadDashboard()
+            .then((result) => {
                 if (active) {
-                    setProfile(result.profile);
+                    setDashboard(result);
+                    setError(null);
                 }
-
-                const complaintResult = await getCitizenComplaints();
-
+            })
+            .catch((loadError) => {
                 if (active) {
-                    setComplaints(complaintResult.data || []);
-
-                    setStatistics(
-                        complaintResult.statistics || {
-                            total:
-                                complaintResult.pagination?.total || 0,
-                            pending_review: 0,
-                            in_progress: 0,
-                            resolved: 0,
-                        }
-                    );
+                    setError(loadError);
                 }
-            } catch (err) {
+            })
+            .finally(() => {
                 if (active) {
-                    setError(
-                        err.message ||
-                        "Unable to load your dashboard."
-                    );
+                    setIsLoading(false);
                 }
-            } finally {
-                if (active) {
-                    setLoading(false);
-                }
-            }
-        }
-
-        void loadDashboard();
+            });
 
         return () => {
             active = false;
         };
-    }, [navigate]);
+    }, [loadDashboard]);
 
-    if (loading) {
+    const profile = dashboard?.profile ?? authProfile;
+    const complaints = dashboard?.complaints || [];
+    const statistics = dashboard?.statistics;
+
+    if (isLoading) {
         return (
             <div
                 role="status"
-                className="min-h-screen bg-slate-50"
+                className="app-bg min-h-screen"
             >
                 <span className="sr-only">
                     Loading dashboard...
                 </span>
 
                 <div aria-hidden="true">
-                    <div className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
+                    <div className="glass mx-4 mt-4 flex items-center justify-between rounded-2xl px-6 py-4">
                         <div className="flex items-center gap-3">
                             <Skeleton className="h-9 w-9 rounded-lg" />
                             <Skeleton className="h-5 w-36 rounded" />
@@ -184,7 +226,7 @@ export default function CitizenDashboard() {
                     </div>
 
                     <div className="mx-auto max-w-7xl space-y-6 p-6">
-                        <div>
+                        <div className="glass rounded-3xl p-6 sm:p-8">
                             <Skeleton className="h-8 w-72 max-w-full rounded" />
                             <Skeleton className="mt-3 h-4 w-full max-w-xl rounded" />
                         </div>
@@ -193,28 +235,30 @@ export default function CitizenDashboard() {
                             {Array.from({ length: 4 }).map((_, index) => (
                                 <div
                                     key={index}
-                                    className="rounded-xl border border-slate-200 bg-white p-5"
+                                    className="glass rounded-2xl p-5"
                                 >
-                                    <div className="flex items-center justify-between gap-3">
-                                        <Skeleton className="h-4 w-28 rounded" />
-                                        <Skeleton className="h-9 w-9 rounded-lg" />
-                                    </div>
+                                    <div className="flex items-center gap-4">
+                                        <Skeleton className="h-12 w-12 shrink-0 rounded-full" />
 
-                                    <Skeleton className="mt-4 h-9 w-14 rounded" />
-                                    <Skeleton className="mt-3 h-3 w-36 rounded" />
+                                        <div>
+                                            <Skeleton className="h-4 w-28 rounded" />
+                                            <Skeleton className="mt-3 h-9 w-14 rounded" />
+                                            <Skeleton className="mt-3 h-3 w-32 rounded" />
+                                        </div>
+                                    </div>
                                 </div>
                             ))}
                         </div>
 
                         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(280px,1fr)]">
-                            <div className="rounded-xl border border-slate-200 bg-white p-5">
+                            <div className="glass rounded-2xl p-5">
                                 <Skeleton className="h-5 w-44 rounded" />
                                 <Skeleton className="mt-2 h-4 w-60 max-w-full rounded" />
-                                <Skeleton className="mt-5 h-48 w-full rounded-lg" />
+                                <Skeleton className="mt-5 h-48 w-full rounded-xl" />
                             </div>
 
                             <div className="space-y-6">
-                                <div className="rounded-xl border border-slate-200 bg-white p-5">
+                                <div className="glass rounded-2xl p-5">
                                     <Skeleton className="h-5 w-32 rounded" />
                                     <Skeleton className="mt-2 h-4 w-48 rounded" />
 
@@ -224,7 +268,7 @@ export default function CitizenDashboard() {
                                                 key={index}
                                                 className="flex items-center gap-3"
                                             >
-                                                <Skeleton className="h-10 w-10 shrink-0 rounded-lg" />
+                                                <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
 
                                                 <div className="flex-1 space-y-2">
                                                     <Skeleton className="h-4 w-36 rounded" />
@@ -235,7 +279,7 @@ export default function CitizenDashboard() {
                                     </div>
                                 </div>
 
-                                <div className="rounded-xl border border-slate-200 bg-white p-5">
+                                <div className="glass rounded-2xl p-5">
                                     <Skeleton className="h-5 w-40 rounded" />
                                     <Skeleton className="mt-2 h-4 w-44 rounded" />
 
@@ -268,13 +312,33 @@ export default function CitizenDashboard() {
 
     return (
         <CitizenLayout title="Dashboard" profile={profile}>
+            <section className="glass relative overflow-hidden rounded-3xl p-6 sm:p-8">
+                <div aria-hidden="true" className="pointer-events-none absolute -right-16 -top-20 h-72 w-72 rounded-full bg-emerald-300/30 blur-3xl" />
+
+                <div className="relative">
+                    <p className="text-sm font-medium text-emerald-700">
+                        Citizen Portal
+                    </p>
+
+                    <h2 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
+                        Welcome back, {firstName}
+                    </h2>
+
+                    <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">
+                        Report community concerns and keep track of your
+                        complaints in one place.
+                    </p>
+
+                    <span className="mt-3 block h-1 w-20 rounded-full bg-emerald-500" aria-hidden="true" />
+                </div>
+            </section>
+
             {error && (
                 <div
                     role="alert"
-                    className="flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+                    className="flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
                 >
-                    <p>{error}</p>
-
+                    <p>{error.message}</p>
                     <button
                         type="button"
                         onClick={() => window.location.reload()}
@@ -285,55 +349,48 @@ export default function CitizenDashboard() {
                 </div>
             )}
 
-            <section className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
-                <div>
-                    <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-                        Welcome back, {firstName}
-                    </h2>
-
-                    <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">
-                        Report community concerns and keep track of your
-                        complaints in one place.
-                    </p>
-                </div>
-            </section>
-
             <section>
                 <h2 className="sr-only">Complaint overview</h2>
 
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                    <StatCard
-                        label="Total complaints"
-                        value={statistics.total}
-                        description="All your submissions"
-                        icon="file"
-                        tone="bg-slate-100 text-slate-700"
-                    />
+                {statistics ? (
+                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                        <StatCard
+                            label="Total complaints"
+                            value={statistics.total}
+                            description="All your submissions"
+                            icon="file"
+                            tone="bg-slate-100 text-slate-700"
+                        />
 
-                    <StatCard
-                        label="Pending review"
-                        value={statistics.pending_review}
-                        description="Awaiting initial assessment"
-                        icon="clock"
-                        tone="bg-amber-50 text-amber-700"
-                    />
+                        <StatCard
+                            label="Pre-assignment"
+                            value={statistics.pre_assignment}
+                            description="Submitted, under review, or accepted"
+                            icon="clock"
+                            tone="bg-amber-50 text-amber-700"
+                        />
 
-                    <StatCard
-                        label="In progress"
-                        value={statistics.in_progress}
-                        description="Currently being handled"
-                        icon="progress"
-                        tone="bg-sky-50 text-sky-700"
-                    />
+                        <StatCard
+                            label="Assigned / In progress"
+                            value={statistics.in_progress}
+                            description="Assigned or currently being handled"
+                            icon="progress"
+                            tone="bg-sky-50 text-sky-700"
+                        />
 
-                    <StatCard
-                        label="Resolved"
-                        value={statistics.resolved}
-                        description="Approved by LGU Staff"
-                        icon="check"
-                        tone="bg-emerald-50 text-emerald-700"
-                    />
-                </div>
+                        <StatCard
+                            label="Resolved"
+                            value={statistics.resolved}
+                            description="Approved by LGU Staff"
+                            icon="check"
+                            tone="bg-emerald-50 text-emerald-700"
+                        />
+                    </div>
+                ) : (
+                    <p role="status" className="glass rounded-xl px-4 py-3 text-sm text-slate-600">
+                        Complaint statistics are unavailable.
+                    </p>
+                )}
             </section>
 
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(280px,1fr)]">
@@ -353,8 +410,12 @@ export default function CitizenDashboard() {
                         </Link>
                     }
                 >
-                    {complaints.length === 0 ? (
-                        <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50/60 px-5 py-10 text-center">
+                    {error ? (
+                        <p role="status" className="py-8 text-center text-sm text-slate-500">
+                            Complaint records are unavailable.
+                        </p>
+                    ) : complaints.length === 0 ? (
+                        <div className="glass-soft rounded-2xl px-5 py-10 text-center">
                             <Icon
                                 name="file"
                                 className="mx-auto h-8 w-8 text-slate-400"
@@ -375,11 +436,11 @@ export default function CitizenDashboard() {
                                 <Link
                                     key={complaint.id}
                                     to={`/citizen/complaints/${complaint.id}`}
-                                    className={`flex items-center justify-between gap-4 rounded-lg px-3 py-4 hover:bg-slate-50 ${focusRing}`}
+                                    className={`glass-hover flex items-center justify-between gap-4 rounded-xl px-3 py-4 ${focusRing}`}
                                 >
                                     <span className="min-w-0">
                                         <span className="block truncate text-sm font-semibold text-slate-900">
-                                            {complaint.title}
+                                            {complaint.title || "Title unavailable"}
                                         </span>
 
                                         <span className="mt-1 block text-xs text-slate-500">
@@ -441,9 +502,9 @@ export default function CitizenDashboard() {
                                 <Link
                                     key={action.to}
                                     to={action.to}
-                                    className={`group -mx-2 flex items-center gap-3 rounded-lg px-2 py-3.5 hover:bg-slate-50 ${focusRing}`}
+                                    className={`glass-hover group -mx-2 flex items-center gap-3 rounded-xl px-2 py-3.5 ${focusRing}`}
                                 >
-                                    <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800">
+                                    <span className="glass-icon flex h-10 w-10 items-center justify-center rounded-full">
                                         <Icon name={action.icon} />
                                     </span>
 

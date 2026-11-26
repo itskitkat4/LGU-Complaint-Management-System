@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import CitizenLayout from "../../layouts/CitizenLayout";
 
@@ -94,13 +93,16 @@ const steps = [
 
 function SectionHeading({ title, description }) {
   return (
-    <div className="mb-5">
-      <h2 className="text-base font-bold text-slate-900">{title}</h2>
-      {description && (
-        <p className="mt-1 text-sm leading-6 text-slate-500">
-          {description}
-        </p>
-      )}
+    <div className="mb-5 flex items-start gap-3">
+      <span className="mt-0.5 h-9 w-1 shrink-0 rounded-full bg-emerald-500" aria-hidden="true" />
+      <div>
+        <h2 className="text-base font-bold text-slate-900">{title}</h2>
+        {description && (
+          <p className="mt-1 text-sm leading-6 text-slate-500">
+            {description}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -175,9 +177,9 @@ function FAQItem({ question, answer }) {
         </span>
 
         <span
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-lg font-medium transition-colors ${
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-lg font-medium transition-colors ${
             open
-              ? "bg-emerald-800 text-white"
+              ? "glass-icon"
               : "bg-emerald-50 text-emerald-800"
           }`}
         >
@@ -220,12 +222,12 @@ export default function HelpSupport() {
         </div>
 
         {/* Support Banner */}
-        <section className="relative overflow-hidden rounded-2xl bg-emerald-800 p-6 text-white shadow-sm sm:p-8">
-          <div className="pointer-events-none absolute -right-10 -top-16 h-56 w-56 rounded-full border-[30px] border-white/5" />
-          <div className="pointer-events-none absolute -bottom-24 right-32 h-48 w-48 rounded-full bg-emerald-700/60" />
+        <section className="glass-icon relative overflow-hidden rounded-3xl p-6 sm:p-8">
+          <div className="pointer-events-none absolute -right-10 -top-16 h-56 w-56 rounded-full border-[30px] border-white/10" />
+          <div className="pointer-events-none absolute -bottom-24 right-32 h-48 w-48 rounded-full bg-emerald-300/20" />
 
           <div className="relative max-w-2xl">
-            <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-white/15">
+            <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-white/20">
               <SupportIcon type="help" className="h-6 w-6" />
             </div>
 
@@ -245,7 +247,7 @@ export default function HelpSupport() {
         </section>
 
         {/* Getting Started */}
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <section className="glass rounded-2xl p-5 sm:p-6">
           <SectionHeading
             title="Getting Started"
             description="Follow these steps when using BantaySerbisyo."
@@ -255,14 +257,14 @@ export default function HelpSupport() {
             {steps.map((step) => (
               <div
                 key={step.number}
-                className="rounded-xl border border-slate-100 bg-slate-50/70 p-5 transition-colors hover:border-emerald-200 hover:bg-emerald-50/40"
+                className="glass-soft glass-hover rounded-2xl p-5"
               >
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-bold tracking-wider text-emerald-800">
                     {step.number}
                   </span>
 
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800">
+                  <span className="glass-icon flex h-10 w-10 items-center justify-center rounded-xl">
                     <SupportIcon type={step.icon} />
                   </span>
                 </div>
@@ -280,7 +282,7 @@ export default function HelpSupport() {
         </section>
 
         {/* Complaint Status */}
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <section className="glass rounded-2xl p-5 sm:p-6">
           <SectionHeading
             title="Understanding Complaint Status"
             description="Know what each status means as your complaint progresses."
@@ -309,9 +311,9 @@ export default function HelpSupport() {
         </section>
 
         {/* Frequently Asked Questions */}
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <section className="glass rounded-2xl p-5 sm:p-6">
           <div className="mb-5 flex items-start gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800">
+            <span className="glass-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
               <SupportIcon type="help" />
             </span>
 
@@ -337,9 +339,9 @@ export default function HelpSupport() {
         </section>
 
         {/* Contact Support */}
-        <section className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-5 sm:p-6">
+        <section className="glass rounded-2xl p-5 sm:p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800">
+            <div className="glass-icon flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
               <SupportIcon type="mail" className="h-6 w-6" />
             </div>
 
@@ -354,7 +356,7 @@ export default function HelpSupport() {
               </p>
             </div>
 
-            <span className="inline-flex w-fit shrink-0 items-center gap-2 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-800">
+            <span className="glass-soft inline-flex w-fit shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-emerald-800">
               <span className="h-2 w-2 rounded-full bg-emerald-600" />
               Support Information
             </span>

@@ -25,6 +25,22 @@ class Complaint extends Model
         'rejection_reason',
     ];
 
+    protected function casts(): array
+    {
+        return [
+            'is_anonymous' => 'boolean',
+        ];
+    }
+
+    protected static function booted(): void
+    {
+        static::updating(function (Complaint $complaint): void {
+            if ($complaint->isDirty('is_anonymous')) {
+                throw new \LogicException('Complaint anonymity cannot be changed after submission.');
+            }
+        });
+    }
+
     public function citizen(): BelongsTo
     {
         return $this->belongsTo(Profile::class, 'citizen_id');

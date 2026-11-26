@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import StaffLayout from "../../layouts/StaffLayout";
@@ -9,6 +8,7 @@ import {
   primaryBtn,
 } from "../../components/ui";
 import { getDepartmentPersonnelComplaints } from "../../lib/api";
+import { ContentSkeleton } from "../../components/Skeletons";
 
 export default function MyAssignments() {
   const [assignments, setAssignments] = useState([]);
@@ -63,30 +63,22 @@ export default function MyAssignments() {
   return (
     <StaffLayout title="My Assignments" role="Department Personnel">
       <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-            My assignments
-          </h2>
-          <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">
-            Work on your assigned complaints and keep their progress updated.
-          </p>
+        <div className="flex items-start gap-3">
+          <span className="mt-1 h-14 w-1 shrink-0 rounded-full bg-emerald-500" aria-hidden="true" />
+          <div>
+            <h2 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+              My assignments
+            </h2>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">
+              Work on your assigned complaints and keep their progress updated.
+            </p>
+          </div>
         </div>
 
         {loading ? (
-          <div className="space-y-4">
-            {[1, 2, 3].map((item) => (
-              <div
-                key={item}
-                className="animate-pulse rounded-xl border border-slate-200 bg-white p-5"
-              >
-                <div className="h-3 w-28 rounded bg-slate-200" />
-                <div className="mt-3 h-5 w-2/3 rounded bg-slate-200" />
-                <div className="mt-4 h-4 w-32 rounded bg-slate-200" />
-              </div>
-            ))}
-          </div>
+          <ContentSkeleton label="Loading your assignments" variant="list" rows={3} />
         ) : error ? (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-5 py-6">
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-6">
             <p className="text-sm font-medium text-red-700">{error}</p>
             <button
               type="button"
@@ -100,7 +92,7 @@ export default function MyAssignments() {
             </button>
           </div>
         ) : assignments.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50/60 px-5 py-10 text-center">
+          <div className="glass rounded-2xl px-5 py-10 text-center">
             <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-white text-slate-500 ring-1 ring-slate-200">
               <Icon name="file" className="h-6 w-6" />
             </span>
@@ -113,20 +105,20 @@ export default function MyAssignments() {
           </div>
         ) : (
           <>
-            <section className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center">
+            <section className="glass flex flex-col gap-3 rounded-2xl p-4 sm:flex-row sm:items-center">
               <input
                 type="search"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search complaint, ID, or category"
                 aria-label="Search my assignments"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-100 sm:flex-1"
+                className="glass-input w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-100 sm:flex-1"
               />
               <select
                 value={statusFilter}
                 onChange={(event) => setStatusFilter(event.target.value)}
                 aria-label="Filter assignments by status"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-100 sm:w-52"
+                className="glass-input w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-100 sm:w-52"
               >
                 <option value="all">All statuses</option>
                 <option value="assigned">Assigned</option>
@@ -136,7 +128,7 @@ export default function MyAssignments() {
             </section>
 
             {visibleAssignments.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-slate-300 bg-white px-5 py-10 text-center">
+              <div className="glass rounded-2xl px-5 py-10 text-center">
                 <h3 className="font-semibold text-slate-900">No matching assignments</h3>
                 <p className="mt-1 text-sm text-slate-500">Try another search or status filter.</p>
               </div>
@@ -144,9 +136,9 @@ export default function MyAssignments() {
             <ul className="space-y-4">
               {visibleAssignments.map((item) => (
                 <li key={item.id}>
-                  <article className="flex flex-col justify-between gap-4 rounded-xl border border-slate-200 bg-white p-5 sm:flex-row sm:items-center">
+                  <article className="glass flex flex-col justify-between gap-4 rounded-2xl p-5 sm:flex-row sm:items-center">
                     <div className="flex items-start gap-4">
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800">
+                      <span className="glass-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-full">
                         <Icon name="file" />
                       </span>
 
@@ -200,7 +192,7 @@ export default function MyAssignments() {
                     type="button"
                     disabled={page <= 1}
                     onClick={() => setPage((current) => current - 1)}
-                    className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="glass-btn-secondary rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Previous
                   </button>
@@ -209,7 +201,7 @@ export default function MyAssignments() {
                     type="button"
                     disabled={page >= pagination.last_page}
                     onClick={() => setPage((current) => current + 1)}
-                    className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="glass-btn-secondary rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Next
                   </button>

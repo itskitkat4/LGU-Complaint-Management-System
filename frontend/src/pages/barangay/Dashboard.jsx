@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import StaffLayout from "../../layouts/StaffLayout";
 import {
@@ -7,36 +8,14 @@ import {
   focusRing,
   primaryBtn,
 } from "../../components/ui";
+import { getBarangayDashboardSummary } from "../../lib/api";
+import FeedbackMonitoring from "../shared/FeedbackMonitoring";
 
-const stats = [
-  {
-    label: "Assigned Complaints",
-    value: "8",
-    description: "Complaints routed to your barangay",
-    icon: "file",
-    tone: "bg-slate-100 text-slate-700",
-  },
-  {
-    label: "In Progress",
-    value: "5",
-    description: "Complaints currently being handled",
-    icon: "progress",
-    tone: "bg-sky-50 text-sky-700",
-  },
-  {
-    label: "Awaiting Follow-up",
-    value: "2",
-    description: "Complaints requiring further action",
-    icon: "clock",
-    tone: "bg-amber-50 text-amber-700",
-  },
-  {
-    label: "Completed",
-    value: "14",
-    description: "Complaints marked as resolved",
-    icon: "check",
-    tone: "bg-emerald-50 text-emerald-700",
-  },
+const statDefinitions = [
+  { key: "total_complaints", label: "Assigned Complaints", description: "Complaints in your active barangay assignment", icon: "file", tone: "bg-slate-100 text-slate-700" },
+  { key: "in_progress", label: "In Progress", description: "Assigned complaints currently being handled", icon: "progress", tone: "bg-sky-50 text-sky-700" },
+  { key: "returned_for_follow_up", label: "Returned for Follow-up", description: "Latest resolution was returned for more work", icon: "clock", tone: "bg-amber-50 text-amber-700" },
+  { key: "resolved", label: "Resolved", description: "Complaints with resolved lifecycle status", icon: "check", tone: "bg-emerald-50 text-emerald-700" },
 ];
 
 const actions = [
@@ -48,145 +27,131 @@ const actions = [
   },
 ];
 
-function Skeleton({ className = "" }) {
-  return (
-    <div
-      className={`animate-pulse bg-slate-200 motion-reduce:animate-none ${className}`}
-    />
+function isValidStatistics(value) {
+  return value && statDefinitions.every(({ key }) =>
+    Number.isInteger(value[key]) && value[key] >= 0
   );
 }
 
+function Skeleton({ className = "" }) {
+  return <div className={`animate-pulse bg-slate-200 motion-reduce:animate-none ${className}`} />;
+}
+
 export default function Dashboard() {
-  const loading = false; // TODO: replace with useState/fetch state once connected to the backend
+  const [statistics, setStatistics] = useState(null);
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const loadDashboard = useCallback(async () => {
+    const result = await getBarangayDashboardSummary();
+    if (!isValidStatistics(result?.statistics)) {
+      throw new Error("The barangay dashboard response is incomplete or invalid.");
+    }
+    return result.statistics;
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    loadDashboard()
+      .then((result) => {
+        if (active) {
+          setStatistics(result);
+          setError("");
+        }
+      })
+      .catch((loadError) => {
+        if (active) {
+          setError(loadError.message || "Unable to load complaint statistics.");
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [loadDashboard]);
 
   return (
     <StaffLayout title="Barangay Dashboard" role="Barangay Head">
       <div className="space-y-8">
-
-        {/* Page Heading */}
-        <section className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
-          <div>
-            <p className="text-sm font-medium text-emerald-700">
-              Barangay Portal
-            </p>
-
-            <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-              Community Complaint Overview
-            </h2>
-
-            <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">
-              Monitor complaints routed to your barangay and track their
-              progress toward resolution.
-            </p>
+        <section className="glass relative overflow-hidden rounded-3xl p-6 sm:p-8">
+          <div aria-hidden="true" className="pointer-events-none absolute -right-16 -top-20 h-72 w-72 rounded-full bg-emerald-300/30 blur-3xl" />
+          <div className="relative flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
+            <div>
+              <p className="text-sm font-medium text-emerald-700">Barangay Portal</p>
+              <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Community Complaint Overview</h2>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">
+                Monitor complaints in your active barangay assignment and track their progress.
+              </p>
+              <span className="mt-3 block h-1 w-20 rounded-full bg-emerald-500" aria-hidden="true" />
+            </div>
+            <Link to="/barangay/complaints" className={primaryBtn}>
+              <Icon name="file" className="h-4 w-4" />
+              View Assigned Complaints
+              <Icon name="arrow" className="h-4 w-4" />
+            </Link>
           </div>
-
-          <Link to="/barangay/complaints" className={primaryBtn}>
-            <Icon name="file" className="h-4 w-4" />
-            View Assigned Complaints
-            <Icon name="arrow" className="h-4 w-4" />
-          </Link>
         </section>
 
-        {/* Complaint Statistics */}
         <section aria-labelledby="overview-title">
-          <div className="mb-4">
-            <h3
-              id="overview-title"
-              className="text-base font-semibold text-slate-900"
-            >
-              Complaint Overview
-            </h3>
-
-            <p className="mt-1 text-sm text-slate-500">
-              Summary of complaints handled by your barangay.
-            </p>
+          <div className="mb-4 flex items-start gap-3">
+            <span className="mt-0.5 h-9 w-1 shrink-0 rounded-full bg-emerald-500" aria-hidden="true" />
+            <div>
+              <h3 id="overview-title" className="text-base font-semibold text-slate-900">Complaint Overview</h3>
+              <p className="mt-1 text-sm text-slate-500">Counts are limited to your active barangay-level assignments.</p>
+            </div>
           </div>
 
-          {loading ? (
+          {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
+
+          {isLoading && (
             <div role="status" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <span className="sr-only">Loading complaint statistics...</span>
-
-              {stats.map((stat) => (
-                <div
-                  key={stat.label}
-                  aria-hidden="true"
-                  className="rounded-xl border border-slate-200 bg-white p-5"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <Skeleton className="h-4 w-32 rounded" />
-                      <Skeleton className="mt-3 h-9 w-14 rounded" />
-                    </div>
-                    <Skeleton className="h-11 w-11 rounded-xl" />
-                  </div>
+              {statDefinitions.map((stat) => (
+                <div key={stat.key} aria-hidden="true" className="glass rounded-2xl p-5">
+                  <Skeleton className="h-4 w-36 rounded" />
+                  <Skeleton className="mt-3 h-9 w-14 rounded" />
                   <Skeleton className="mt-4 h-3 w-44 max-w-full rounded" />
                 </div>
               ))}
             </div>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {stats.map((stat) => (
-                <StatCard key={stat.label} {...stat} />
-              ))}
-            </div>
           )}
 
-          <p className="mt-3 text-xs text-slate-400">
-            Sample figures for UI development. Actual statistics will come
-            from the backend.
-          </p>
+          {statistics && (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                {statDefinitions.map((stat) => (
+                  <StatCard key={stat.key} {...stat} value={statistics[stat.key]} />
+                ))}
+              </div>
+              {statistics.total_complaints === 0 && (
+                <p className="mt-3 text-sm text-slate-500">There are no complaints in your active assignment.</p>
+              )}
+            </>
+          )}
         </section>
 
-        {/* Quick Actions */}
-        <Panel
-          title="Quick Actions"
-          description="Common tasks for your barangay."
-        >
-          {loading ? (
-            <div role="status" className="-my-2">
-              <span className="sr-only">Loading quick actions...</span>
-
-              <div aria-hidden="true" className="flex items-center gap-3 py-4">
-                <Skeleton className="h-11 w-11 shrink-0 rounded-xl" />
-                <div className="min-w-0 flex-1 space-y-2">
-                  <Skeleton className="h-4 w-48 rounded" />
-                  <Skeleton className="h-3 w-full max-w-md rounded" />
-                </div>
-                <Skeleton className="h-4 w-4 shrink-0 rounded" />
-              </div>
-            </div>
-          ) : (
-            <div className="-my-2 divide-y divide-slate-100">
-              {actions.map((action) => (
-                <Link
-                  key={action.to}
-                  to={action.to}
-                  className={`group -mx-2 flex items-center gap-3 rounded-lg px-2 py-4 transition-colors hover:bg-slate-50 ${focusRing}`}
-                >
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
-                    <Icon name={action.icon} className="h-5 w-5" />
-                  </span>
-
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-semibold text-slate-900">
-                      {action.title}
-                    </span>
-
-                    <span className="mt-1 block text-xs leading-5 text-slate-500">
-                      {action.text}
-                    </span>
-                  </span>
-
-                  <Icon
-                    name="arrow"
-                    className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none"
-                  />
-                </Link>
-              ))}
-            </div>
-          )}
+        <Panel title="Quick Actions" description="Common tasks for your barangay.">
+          <div className="-my-2 divide-y divide-slate-100">
+            {actions.map((action) => (
+              <Link key={action.to} to={action.to} className={`glass-hover group -mx-2 flex items-center gap-3 rounded-xl px-2 py-4 ${focusRing}`}>
+                <span className="glass-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-full">
+                  <Icon name={action.icon} className="h-5 w-5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-slate-900">{action.title}</span>
+                  <span className="mt-1 block text-xs leading-5 text-slate-500">{action.text}</span>
+                </span>
+                <Icon name="arrow" className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" />
+              </Link>
+            ))}
+          </div>
         </Panel>
-
+        <FeedbackMonitoring compact />
       </div>
     </StaffLayout>
   );

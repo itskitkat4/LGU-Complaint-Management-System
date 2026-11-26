@@ -45,7 +45,10 @@ class StaffAccountTest extends TestCase
             ], 200),
         ]);
 
-        $response = $this->withToken('fake-citizen-token')
+        $response = $this->withToken($this->syntheticSupabaseToken(
+            '11111111-1111-4111-8111-111111111111',
+            ['oauth']
+        ))
             ->postJson('/api/staff-accounts', []);
 
         $response->assertForbidden();
@@ -79,7 +82,10 @@ class StaffAccountTest extends TestCase
             ], 200),
         ]);
 
-        $response = $this->withToken('fake-admin-token')
+        $response = $this->withToken($this->syntheticSupabaseToken(
+            '22222222-2222-4222-8222-222222222222',
+            ['password']
+        ))
             ->postJson('/api/staff-accounts', [
                 'full_name' => 'Test Citizen',
                 'email' => 'newcitizen@example.com',
@@ -119,7 +125,10 @@ class StaffAccountTest extends TestCase
         ]);
 
         // Barangay Head must have a barangay assignment.
-        $barangayResponse = $this->withToken('fake-admin-token')
+        $barangayResponse = $this->withToken($this->syntheticSupabaseToken(
+            '22222222-2222-4222-8222-222222222222',
+            ['password']
+        ))
             ->postJson('/api/staff-accounts', [
                 'full_name' => 'Test Barangay Head',
                 'email' => 'barangayhead@example.com',
@@ -129,7 +138,10 @@ class StaffAccountTest extends TestCase
         $barangayResponse->assertUnprocessable();
 
         // Department Head must have a department assignment.
-        $departmentResponse = $this->withToken('fake-admin-token')
+        $departmentResponse = $this->withToken($this->syntheticSupabaseToken(
+            '22222222-2222-4222-8222-222222222222',
+            ['password']
+        ))
             ->postJson('/api/staff-accounts', [
                 'full_name' => 'Test Department Head',
                 'email' => 'departmenthead@example.com',
@@ -167,7 +179,10 @@ class StaffAccountTest extends TestCase
             ], 200),
         ]);
 
-        $response = $this->withToken('fake-admin-token')
+        $response = $this->withToken($this->syntheticSupabaseToken(
+            '22222222-2222-4222-8222-222222222222',
+            ['password']
+        ))
             ->postJson('/api/staff-accounts', [
                 'full_name' => 'Test Personnel',
                 'email' => 'personnel@example.com',
@@ -215,7 +230,10 @@ class StaffAccountTest extends TestCase
             ], 200),
         ]);
 
-        $response = $this->withToken('fake-admin-token')
+        $response = $this->withToken($this->syntheticSupabaseToken(
+            '22222222-2222-4222-8222-222222222222',
+            ['password']
+        ))
             ->patchJson("/api/staff-accounts/{$staffId}/deactivate");
 
         $response->assertOk();
@@ -264,7 +282,7 @@ class StaffAccountTest extends TestCase
             ], 200),
         ]);
 
-        $response = $this->withToken('fake-citizen-token')
+        $response = $this->withToken($this->syntheticSupabaseToken($citizenId, ['oauth']))
             ->patchJson("/api/staff-accounts/{$staffId}/deactivate");
 
         $response->assertForbidden();
@@ -304,7 +322,7 @@ class StaffAccountTest extends TestCase
             ], 200),
         ]);
 
-        $response = $this->withToken('fake-admin-token')
+        $response = $this->withToken($this->syntheticSupabaseToken($adminId, ['password']))
             ->patchJson("/api/staff-accounts/{$adminId}/deactivate");
 
         $response->assertForbidden();

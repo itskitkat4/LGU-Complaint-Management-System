@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import Swal from "sweetalert2";
 import StaffLayout from "../../layouts/StaffLayout";
 import { Icon, inputClass, primaryBtn, secondaryBtn, StatusBadge } from "../../components/ui";
+import { ContentSkeleton } from "../../components/Skeletons";
 import {
   getDepartmentMonitoring,
   recordDepartmentEscalationOutcome,
@@ -146,23 +147,26 @@ export default function DepartmentMonitoring() {
   return (
     <StaffLayout title="Department Monitoring" role="Department Head">
       <div className="space-y-6">
-        <header>
-          <p className="text-sm font-medium text-emerald-700">Department Portal</p>
-          <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Department monitoring</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-            Monitor complaints assigned to your department, see the current handler and status, and record external escalation outcomes.
-          </p>
+        <header className="flex items-start gap-3">
+          <span className="mt-1 h-16 w-1 shrink-0 rounded-full bg-emerald-500" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium text-emerald-700">Department Portal</p>
+            <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Department monitoring</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+              Monitor complaints assigned to your department, see the current handler and status, and record external escalation outcomes.
+            </p>
+          </div>
         </header>
 
         {loading ? (
-          <p role="status" className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Loading department complaints…</p>
+          <ContentSkeleton label="Loading department complaints" variant="list" rows={4} />
         ) : error ? (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
             {error}
             <button type="button" className="ml-3 font-semibold underline" onClick={() => setRefreshKey((current) => current + 1)}>Try again</button>
           </div>
         ) : complaints.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-300 bg-white px-5 py-12 text-center">
+          <div className="glass rounded-2xl px-5 py-12 text-center">
             <h3 className="font-semibold text-slate-900">No active department assignments</h3>
             <p className="mt-1 text-sm text-slate-500">Complaints routed to your department will appear here, including work assigned to personnel.</p>
           </div>
@@ -175,7 +179,7 @@ export default function DepartmentMonitoring() {
               const latestEscalation = escalations[0];
 
               return (
-                <article key={complaint.id} className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
+                <article key={complaint.id} className="glass rounded-2xl p-5 sm:p-6">
                   <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
                     <div className="min-w-0">
                       <p className="text-xs font-medium text-slate-500">Complaint {complaint.id}</p>
@@ -203,7 +207,7 @@ export default function DepartmentMonitoring() {
                   </dl>
 
                   {latestEscalation && (
-                    <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                    <div className="glass-soft mt-4 rounded-2xl p-4">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="text-sm font-semibold text-slate-900">External escalation · {latestEscalation.higher_authority_office}</p>
                         <StatusBadge status={formatStatus(latestEscalation.status)} />
@@ -244,15 +248,15 @@ export default function DepartmentMonitoring() {
           <div className="flex items-center justify-between text-sm text-slate-600">
             <span>Page {pagination.current_page} of {pagination.last_page}</span>
             <div className="flex gap-2">
-              <button type="button" disabled={page <= 1} onClick={() => setPage((current) => current - 1)} className="rounded-lg border px-3 py-2 disabled:opacity-40">Previous</button>
-              <button type="button" disabled={page >= pagination.last_page} onClick={() => setPage((current) => current + 1)} className="rounded-lg border px-3 py-2 disabled:opacity-40">Next</button>
+              <button type="button" disabled={page <= 1} onClick={() => setPage((current) => current - 1)} className="glass-btn-secondary rounded-xl border border-slate-300 px-3 py-2 text-slate-700 disabled:opacity-40">Previous</button>
+              <button type="button" disabled={page >= pagination.last_page} onClick={() => setPage((current) => current + 1)} className="glass-btn-secondary rounded-xl border border-slate-300 px-3 py-2 text-slate-700 disabled:opacity-40">Next</button>
             </div>
           </div>
         )}
 
         {dialog && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" onMouseDown={(event) => event.target === event.currentTarget && closeDialog()}>
-            <section role="dialog" aria-modal="true" aria-labelledby="department-escalation-title" className="w-full max-w-xl rounded-2xl bg-white shadow-2xl">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm" onMouseDown={(event) => event.target === event.currentTarget && closeDialog()}>
+            <section role="dialog" aria-modal="true" aria-labelledby="department-escalation-title" className="w-full max-w-xl rounded-3xl bg-white shadow-2xl">
               <form onSubmit={submitDialog}>
                 <div className="border-b border-slate-100 p-5">
                   <h3 id="department-escalation-title" className="text-lg font-semibold text-slate-900">
@@ -278,7 +282,7 @@ export default function DepartmentMonitoring() {
                   )}
                 </div>
                 <div className="flex justify-end gap-3 border-t border-slate-100 p-5">
-                  <button type="button" disabled={submitting} onClick={closeDialog} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700">Cancel</button>
+                  <button type="button" disabled={submitting} onClick={closeDialog} className="glass-btn-secondary rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700">Cancel</button>
                   <button type="submit" disabled={submitting} className={primaryBtn}>
                     {submitting ? "Saving…" : dialog.mode === "request" ? "Record escalation" : "Save outcome"}
                     <Icon name="arrow" className="h-4 w-4" />

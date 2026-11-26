@@ -43,17 +43,20 @@ export default function ComplaintQueue() {
   return (
     <StaffLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-            Complaint Queue
-          </h1>
-          <p className="mt-2 text-sm leading-6 text-slate-600">
-            Review complaints submitted by citizens.
-          </p>
+        <div className="flex items-start gap-3">
+          <span className="mt-1 h-12 w-1 shrink-0 rounded-full bg-emerald-500" aria-hidden="true" />
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+              Complaint Queue
+            </h1>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Review complaints submitted by citizens.
+            </p>
+          </div>
         </div>
 
         {loading && (
-          <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <section className="glass overflow-hidden rounded-2xl">
             <div role="status" className="overflow-x-auto">
               <span className="sr-only">Loading complaints...</span>
 
@@ -61,7 +64,7 @@ export default function ComplaintQueue() {
                 className="w-full min-w-[800px] text-left text-sm"
                 aria-hidden="true"
               >
-                <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <thead className="glass-soft text-xs font-semibold uppercase tracking-wide text-slate-500">
                   <tr>
                     {headings.map((heading) => (
                       <th key={heading} className="px-5 py-3.5">
@@ -104,14 +107,14 @@ export default function ComplaintQueue() {
         {error && (
           <div
             role="alert"
-            className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+            className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
           >
             {error}
           </div>
         )}
 
         {!loading && !error && complaints.length === 0 && (
-          <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/60 px-5 py-12 text-center">
+          <div className="glass rounded-2xl px-5 py-12 text-center">
             <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-white text-slate-500 ring-1 ring-slate-200">
               <Icon name="file" className="h-6 w-6" />
             </span>
@@ -125,12 +128,12 @@ export default function ComplaintQueue() {
         )}
 
         {!loading && !error && complaints.length > 0 && (
-          <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <section className="glass overflow-hidden rounded-2xl">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[800px] text-left text-sm">
                 <caption className="sr-only">Complaints pending review</caption>
 
-                <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <thead className="glass-soft text-xs font-semibold uppercase tracking-wide text-slate-500">
                   <tr>
                     {headings.map((heading) => (
                       <th key={heading} scope="col" className="px-5 py-3.5">
@@ -144,7 +147,7 @@ export default function ComplaintQueue() {
                   {complaints.map((complaint) => (
                     <tr
                       key={complaint.id}
-                      className="transition-colors hover:bg-slate-50"
+                      className="glass-hover"
                     >
                       <td className="px-5 py-4">
                         <p className="font-semibold text-slate-900">

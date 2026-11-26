@@ -10,6 +10,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
 class ComplaintResolutionTest extends TestCase
@@ -25,6 +26,18 @@ class ComplaintResolutionTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        Schema::create('complaint_categories', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->string('name');
+            $table->timestamps();
+        });
+
+        Schema::create('barangays', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->string('name');
+            $table->timestamps();
+        });
 
         Schema::create('profiles', function (Blueprint $table) {
             $table->uuid('id')->primary();
@@ -48,6 +61,7 @@ class ComplaintResolutionTest extends TestCase
             $table->uuid('citizen_id')->nullable();
             $table->uuid('category_id')->nullable();
             $table->uuid('barangay_id')->nullable();
+            $table->boolean('is_anonymous')->default(false);
             $table->string('title');
             $table->text('description')->nullable();
             $table->string('priority')->default('medium');
@@ -76,6 +90,7 @@ class ComplaintResolutionTest extends TestCase
             $table->uuid('complaint_id');
             $table->uuid('submitted_by');
             $table->text('resolution_description');
+            $table->date('completed_at')->nullable();
             $table->string('review_status')->default('pending_review');
             $table->uuid('reviewed_by')->nullable();
             $table->text('review_comment')->nullable();
@@ -92,6 +107,7 @@ class ComplaintResolutionTest extends TestCase
             $table->string('file_name');
             $table->string('mime_type');
             $table->unsignedBigInteger('file_size');
+            $table->string('evidence_type')->default('supporting');
             $table->timestamp('created_at')->nullable();
         });
         Schema::create('notifications', function (Blueprint $table) {
@@ -166,10 +182,11 @@ class ComplaintResolutionTest extends TestCase
             '*' => Http::response([
                 'id' => $profileId,
                 'email' => $email,
+                'app_metadata' => ['bantayserbisyo_password_setup_completed' => true],
             ], 200),
         ]);
 
-        $this->withToken('fake-test-token');
+        $this->withToken($this->syntheticSupabaseToken($profileId, ['password']));
     }
 
     private function createComplaint(string $level): Complaint
@@ -214,6 +231,16 @@ class ComplaintResolutionTest extends TestCase
         ]);
     }
 
+    private function resolutionEvidence(): array
+    {
+        return [
+            'resolution_description' => 'The complaint has been addressed and corrective work completed.',
+            'completed_at' => now()->toDateString(),
+            'before_photo' => UploadedFile::fake()->image('before.jpg'),
+            'evidence' => [UploadedFile::fake()->image('supporting.jpg')],
+        ];
+    }
+
     public function test_barangay_head_can_submit_resolution(): void
     {
         $complaint = $this->createComplaint('barangay');
@@ -241,11 +268,10 @@ class ComplaintResolutionTest extends TestCase
 
         $this->authenticateAs($this->barangayHeadId, 'barangay@example.com');
 
-        $response = $this->postJson(
+        $response = $this->post(
             "/api/complaints/{$complaint->id}/resolutions",
-            [
-                'resolution_description' => 'The barangay team repaired the reported damaged road.',
-            ]
+            $this->resolutionEvidence(),
+            ['Accept' => 'application/json']
         );
 
         $response->assertCreated();
@@ -279,6 +305,19 @@ class ComplaintResolutionTest extends TestCase
             'submitted_by' => $this->barangayHeadId,
             'review_status' => 'pending_review',
         ]);
+        $this->assertSame(
+            now()->toDateString(),
+            ComplaintResolution::where('complaint_id', $complaint->id)
+                ->firstOrFail()->completed_at->toDateString()
+        );
+        $this->assertDatabaseHas('complaint_resolution_attachments', [
+            'resolution_id' => $response->json('data.id'),
+            'evidence_type' => 'before',
+        ]);
+        $this->assertDatabaseHas('complaint_resolution_attachments', [
+            'resolution_id' => $response->json('data.id'),
+            'evidence_type' => 'supporting',
+        ]);
 
         $this->assertDatabaseHas('complaints', [
             'id' => $complaint->id,
@@ -297,11 +336,10 @@ class ComplaintResolutionTest extends TestCase
             'personnel@example.com'
         );
 
-        $response = $this->postJson(
+        $response = $this->post(
             "/api/complaints/{$complaint->id}/resolutions",
-            [
-                'resolution_description' => 'The engineering team completed the necessary repair work.',
-            ]
+            $this->resolutionEvidence(),
+            ['Accept' => 'application/json']
         );
 
         $response->assertCreated();
@@ -334,6 +372,56 @@ class ComplaintResolutionTest extends TestCase
         $response->assertForbidden();
 
         $this->assertDatabaseCount('complaint_resolutions', 0);
+    }
+
+    public function test_department_head_cannot_submit_resolution(): void
+    {
+        $headId = '77777777-7777-4777-8777-777777777777';
+        Profile::create([
+            'id' => $headId,
+            'full_name' => 'Department Head',
+            'email' => 'head@example.com',
+            'role' => 'Department_Head',
+            'department_id' => $this->departmentId,
+            'is_active' => true,
+        ]);
+        $complaint = $this->createComplaint('lgu');
+        $this->authenticateAs($headId, 'head@example.com');
+
+        $this->postJson("/api/complaints/{$complaint->id}/resolutions", [])
+            ->assertForbidden();
+        $this->assertDatabaseCount('complaint_resolutions', 0);
+    }
+
+    public function test_completion_date_must_be_valid_and_not_in_the_future(): void
+    {
+        $complaint = $this->createComplaint('barangay');
+        $this->assignComplaint($complaint, $this->barangayHeadId, 'barangay');
+        $this->authenticateAs($this->barangayHeadId, 'barangay@example.com');
+
+        $this->postJson("/api/complaints/{$complaint->id}/resolutions", [
+            'resolution_description' => 'The repair was completed successfully.',
+            'completed_at' => now()->addDay()->toDateString(),
+        ])->assertUnprocessable()->assertJsonValidationErrors('completed_at');
+    }
+
+    public function test_lgu_staff_resolution_queue_redacts_anonymous_complaint_identity(): void
+    {
+        $complaint = $this->createComplaint('barangay');
+        $complaint->update([
+            'citizen_id' => $this->citizenId,
+        ]);
+        DB::table('complaints')->where('id', $complaint->id)->update(['is_anonymous' => true]);
+        $this->createPendingResolution($complaint);
+
+        $this->authenticateAs($this->staffId, 'staff@example.com');
+
+        $response = $this->getJson('/api/staff/resolutions');
+
+        $response->assertOk()
+            ->assertJsonPath('data.0.complaint.is_anonymous', true)
+            ->assertJsonMissingPath('data.0.complaint.citizen_id')
+            ->assertJsonMissingPath('data.0.complaint.citizen');
     }
 
     public function test_lgu_staff_can_approve_resolution_and_resolve_complaint(): void
@@ -440,12 +528,22 @@ class ComplaintResolutionTest extends TestCase
             'status' => 'in_progress',
         ]);
 
-        $this->assertDatabaseHas('complaint_updates', [
+        $this->assertDatabaseMissing('complaint_updates', [
             'complaint_id' => $complaint->id,
-            'updated_by' => $this->staffId,
-            'old_status' => 'in_progress',
-            'new_status' => 'in_progress',
+            'comment' => 'Resolution returned by LGU-Staff.',
         ]);
+    }
+
+    public function test_lgu_staff_cannot_return_resolution_with_blank_reason(): void
+    {
+        $complaint = $this->createComplaint('barangay');
+        $resolution = $this->createPendingResolution($complaint);
+        $this->authenticateAs($this->staffId, 'staff@example.com');
+
+        $this->postJson("/api/staff/resolutions/{$resolution->id}/review", [
+            'decision' => 'returned',
+            'review_comment' => " \t ",
+        ])->assertUnprocessable()->assertJsonValidationErrors('review_comment');
     }
     public function test_handler_can_resubmit_resolution_after_previous_one_is_returned(): void
     {
@@ -464,11 +562,10 @@ class ComplaintResolutionTest extends TestCase
 
         $this->authenticateAs($this->barangayHeadId, 'barangay@example.com');
 
-        $response = $this->postJson(
+        $response = $this->post(
             "/api/complaints/{$complaint->id}/resolutions",
-            [
-                'resolution_description' => 'The barangay team completed the additional repair work.',
-            ]
+            $this->resolutionEvidence(),
+            ['Accept' => 'application/json']
         );
 
         $response->assertCreated();

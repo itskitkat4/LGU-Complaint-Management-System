@@ -1,8 +1,8 @@
-
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import Swal from "sweetalert2";
 import StaffLayout from "../../layouts/StaffLayout";
+import { ContentSkeleton } from "../../components/Skeletons";
 import {
   Icon,
   PriorityBadge,
@@ -34,6 +34,8 @@ export default function ComplaintWorkDetails() {
   const [actionTaken, setActionTaken] = useState("");
   const [resolution, setResolution] = useState("");
   const [evidence, setEvidence] = useState([]);
+  const [beforePhoto, setBeforePhoto] = useState(null);
+  const [completedAt, setCompletedAt] = useState("");
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -161,9 +163,35 @@ export default function ComplaintWorkDetails() {
     );
   }
 
+  function setBeforePhotoFile(event) {
+    const file = event.target.files?.[0] || null;
+    event.target.value = "";
+
+    if (!file) return;
+
+    if (
+      !["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
+      file.size > MAX_FILE_SIZE
+    ) {
+      void Swal.fire({
+        title: "Invalid photo",
+        text: "Choose a JPG, PNG, or WebP photo up to 10 MB.",
+        icon: "warning",
+        confirmButtonColor: "#047857",
+      });
+      return;
+    }
+
+    setBeforePhoto(file);
+  }
+
   // Open an existing complaint attachment using a signed URL.
   async function openAttachment(attachmentId) {
     const newWindow = window.open("", "_blank");
+    if (newWindow) {
+      // Keep the synchronous popup handle, but sever access to this application immediately.
+      newWindow.opener = null;
+    }
 
     try {
       const result = await getComplaintAttachmentSignedUrl(attachmentId);
@@ -222,6 +250,26 @@ export default function ComplaintWorkDetails() {
       return;
     }
 
+    if (!beforePhoto) {
+      void Swal.fire({
+        title: "Before photo required",
+        text: "Add a before photo to document the complaint.",
+        icon: "warning",
+        confirmButtonColor: "#047857",
+      });
+      return;
+    }
+
+    if (evidence.length === 0) {
+      void Swal.fire({
+        title: "Supporting evidence required",
+        text: "Attach at least one supporting evidence file with your resolution.",
+        icon: "warning",
+        confirmButtonColor: "#047857",
+      });
+      return;
+    }
+
     const description = [
       "Action taken:",
       actionTaken.trim(),
@@ -236,6 +284,8 @@ export default function ComplaintWorkDetails() {
       await submitComplaintResolution(
         complaint.id,
         description,
+        beforePhoto,
+        completedAt,
         evidence
       );
 
@@ -266,10 +316,8 @@ export default function ComplaintWorkDetails() {
         title="Complaint Work Details"
         role="Department Personnel"
       >
-        <div className="mx-auto max-w-4xl animate-pulse space-y-4">
-          <div className="h-5 w-32 rounded bg-slate-200" />
-          <div className="h-48 rounded-xl bg-slate-200" />
-          <div className="h-64 rounded-xl bg-slate-200" />
+        <div className="mx-auto max-w-4xl">
+          <ContentSkeleton label="Loading complaint work details" variant="list" rows={3} />
         </div>
       </StaffLayout>
     );
@@ -291,7 +339,7 @@ export default function ComplaintWorkDetails() {
             My assignments
           </Link>
 
-          <div className="rounded-xl border border-red-200 bg-red-50 p-6">
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-6">
             <p className="font-medium text-red-700">
               {error || "Complaint not found."}
             </p>
@@ -325,7 +373,7 @@ export default function ComplaintWorkDetails() {
         </Link>
 
         {/* Complaint details */}
-        <section className="rounded-xl border border-slate-200 bg-white">
+        <section className="glass rounded-2xl">
           <div className="p-6">
             <p className="text-xs font-medium text-slate-500">
               Complaint ID: {complaint.id}
@@ -392,7 +440,7 @@ export default function ComplaintWorkDetails() {
 
         {/* Start work action */}
         {canStart && (
-          <section className="flex flex-col gap-4 rounded-xl border border-blue-200 bg-blue-50 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <section className="flex flex-col gap-4 rounded-2xl border border-blue-200 bg-blue-50 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="font-semibold text-blue-900">
                 Ready to start working?
@@ -420,7 +468,7 @@ export default function ComplaintWorkDetails() {
 
         {/* Original complaint evidence */}
         {complaint.attachments?.length > 0 && (
-          <section className="rounded-xl border border-slate-200 bg-white p-6">
+          <section className="glass rounded-2xl p-6">
             <h2 className="text-base font-semibold text-slate-900">
               Original complaint evidence
             </h2>
@@ -433,7 +481,7 @@ export default function ComplaintWorkDetails() {
               {complaint.attachments.map((attachment) => (
                 <li
                   key={attachment.id}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"
+                  className="glass-soft flex items-center justify-between gap-3 rounded-xl p-3"
                 >
                   <span className="break-all text-sm text-slate-700">
                     {attachment.file_name ||
@@ -457,7 +505,7 @@ export default function ComplaintWorkDetails() {
         {/* Resolution submission form */}
         <form
           onSubmit={submit}
-          className="rounded-xl border border-slate-200 bg-white"
+          className="glass rounded-2xl"
         >
           <div className="border-b border-slate-100 px-6 py-5">
             <h2 className="text-base font-semibold text-slate-900">
@@ -473,7 +521,7 @@ export default function ComplaintWorkDetails() {
 
             {/* Submission availability */}
             {!canSubmit && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
                 {canStart
                   ? "Start working on this complaint before submitting a resolution."
                   : "Resolution submission is available only when the complaint is in progress."}
@@ -524,21 +572,48 @@ export default function ComplaintWorkDetails() {
               />
             </div>
 
+            <label className="block text-sm font-medium text-slate-700">
+              Completion date <span className="text-red-600">*</span>
+              <input type="date" required max={new Date().toISOString().slice(0, 10)} value={completedAt} onChange={(event) => setCompletedAt(event.target.value)} className={`${inputClass} mt-1`} />
+            </label>
+
+            <div>
+              {[
+                { key: "before", label: "Before photo", file: beforePhoto },
+              ].map((photo) => (
+                <label
+                  key={photo.key}
+                  htmlFor={`${photo.key}-photo`}
+                  className="block text-sm font-medium text-slate-700"
+                >
+                  {photo.label} <span className="text-red-600">*</span>
+                  <input
+                    id={`${photo.key}-photo`}
+                    type="file"
+                    accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                    disabled={!canSubmit || submitting}
+                    onChange={setBeforePhotoFile}
+                    className={`${inputClass} mt-1`}
+                  />
+                  <span className="mt-1 block truncate text-xs font-normal text-slate-500">
+                    {photo.file?.name || "JPG, PNG, or WebP; up to 10 MB"}
+                  </span>
+                </label>
+              ))}
+            </div>
+
             {/* Supporting evidence */}
             <div>
               <label
                 htmlFor="evidence"
                 className="mb-1.5 block text-sm font-medium text-slate-700"
               >
-                Supporting evidence{" "}
-                <span className="font-normal text-slate-500">
-                  (optional)
-                </span>
+                Supporting evidence <span className="text-red-600">*</span>
               </label>
 
               <label
                 htmlFor="evidence"
-                className="flex cursor-pointer flex-col items-center rounded-lg border border-dashed border-slate-300 bg-slate-50/60 px-5 py-8 text-center transition-colors hover:border-emerald-700 hover:bg-emerald-50/50 focus-within:ring-2 focus-within:ring-emerald-700 focus-within:ring-offset-2"
+                className="glass-input flex cursor-pointer flex-col items-center rounded-2xl border border-dashed border-slate-300 px-5 py-8 text-center transition-colors hover:border-emerald-700 focus-within:ring-2 focus-within:ring-emerald-700 focus-within:ring-offset-2"
               >
                 <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-slate-500 ring-1 ring-slate-200">
                   <Icon name="upload" className="h-6 w-6" />
@@ -549,7 +624,7 @@ export default function ComplaintWorkDetails() {
                 </span>
 
                 <span className="mt-1 text-sm text-slate-500">
-                  JPG, PNG, or PDF · Maximum 5 files · 10 MB each
+                  At least 1 file required · JPG, PNG, or PDF · Up to 5 files, 10 MB each
                 </span>
 
                 <input
@@ -573,7 +648,7 @@ export default function ComplaintWorkDetails() {
                   {evidence.map((file, index) => (
                     <li
                       key={`${file.name}-${index}`}
-                      className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 p-3"
+                      className="glass-soft flex items-center justify-between gap-3 rounded-xl p-3"
                     >
                       <div className="flex min-w-0 items-center gap-2">
                         <Icon

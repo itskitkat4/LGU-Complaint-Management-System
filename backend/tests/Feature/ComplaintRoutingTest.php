@@ -30,6 +30,28 @@ class ComplaintRoutingTest extends TestCase
     {
         parent::setUp();
 
+        Schema::create('complaint_categories', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->string('name');
+            $table->timestamps();
+        });
+
+        Schema::create('barangays', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->string('name');
+            $table->timestamps();
+        });
+
+        Schema::create('complaint_attachments', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->uuid('complaint_id');
+            $table->string('file_name');
+            $table->string('file_path');
+            $table->string('mime_type')->nullable();
+            $table->uuid('uploaded_by')->nullable();
+            $table->timestamps();
+        });
+
         Schema::create('profiles', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->string('full_name');
@@ -52,6 +74,7 @@ class ComplaintRoutingTest extends TestCase
             $table->uuid('citizen_id')->nullable();
             $table->uuid('category_id')->nullable();
             $table->uuid('barangay_id')->nullable();
+            $table->boolean('is_anonymous')->default(false);
             $table->string('title');
             $table->text('description')->nullable();
             $table->string('priority')->default('medium');
@@ -164,10 +187,11 @@ class ComplaintRoutingTest extends TestCase
             '*' => Http::response([
                 'id' => $profileId,
                 'email' => $email,
+                'app_metadata' => ['bantayserbisyo_password_setup_completed' => true],
             ], 200),
         ]);
 
-        $this->withToken('fake-test-token');
+        $this->withToken($this->syntheticSupabaseToken($profileId, ['password']));
     }
 
     private function createComplaint(string $level): Complaint
@@ -180,6 +204,64 @@ class ComplaintRoutingTest extends TestCase
             'resolution_level' => $level,
             'barangay_id' => $this->barangayId,
         ]);
+    }
+
+    public function test_lgu_staff_complaint_history_redacts_anonymous_identity(): void
+    {
+        $complaint = $this->createComplaint('lgu');
+        $complaint->update([
+            'status' => 'resolved',
+            'citizen_id' => '66666666-6666-4666-8666-666666666666',
+        ]);
+        DB::table('complaints')->where('id', $complaint->id)->update(['is_anonymous' => true]);
+
+        $this->authenticateAs($this->staffId, $this->staffEmail);
+
+        $response = $this->getJson('/api/staff/complaints/history');
+
+        $response->assertOk()
+            ->assertJsonPath('data.0.id', $complaint->id)
+            ->assertJsonPath('data.0.is_anonymous', true)
+            ->assertJsonMissingPath('data.0.citizen_id')
+            ->assertJsonMissingPath('data.0.citizen');
+    }
+
+    public function test_lgu_staff_complaint_queue_redacts_anonymous_identity(): void
+    {
+        $complaint = $this->createComplaint('lgu');
+        $complaint->update([
+            'citizen_id' => '66666666-6666-4666-8666-666666666666',
+        ]);
+        DB::table('complaints')->where('id', $complaint->id)->update(['is_anonymous' => true]);
+
+        $this->authenticateAs($this->staffId, $this->staffEmail);
+
+        $response = $this->getJson('/api/staff/complaints');
+
+        $response->assertOk()
+            ->assertJsonPath('data.0.id', $complaint->id)
+            ->assertJsonPath('data.0.is_anonymous', true)
+            ->assertJsonMissingPath('data.0.citizen_id')
+            ->assertJsonMissingPath('data.0.citizen');
+    }
+
+    public function test_lgu_staff_complaint_detail_redacts_anonymous_identity(): void
+    {
+        $complaint = $this->createComplaint('lgu');
+        $complaint->update([
+            'citizen_id' => '66666666-6666-4666-8666-666666666666',
+        ]);
+        DB::table('complaints')->where('id', $complaint->id)->update(['is_anonymous' => true]);
+
+        $this->authenticateAs($this->staffId, $this->staffEmail);
+
+        $response = $this->getJson("/api/staff/complaints/{$complaint->id}");
+
+        $response->assertOk()
+            ->assertJsonPath('data.id', $complaint->id)
+            ->assertJsonPath('data.is_anonymous', true)
+            ->assertJsonMissingPath('data.citizen_id')
+            ->assertJsonMissingPath('data.citizen');
     }
 
     public function test_lgu_staff_can_route_complaint_to_correct_barangay_head(): void

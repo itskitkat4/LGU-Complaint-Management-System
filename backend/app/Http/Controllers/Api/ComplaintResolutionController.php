@@ -20,7 +20,7 @@ use Throwable;
 class ComplaintResolutionController extends Controller
 {
     /**
-     * Submit a complaint resolution with optional evidence files.
+     * Submit a complaint resolution with required before and supporting evidence.
      * Allowed handlers: Barangay Head and Department Personnel.
      */
     public function store(
@@ -60,18 +60,26 @@ class ComplaintResolutionController extends Controller
                 'min:10',
                 'max:10000',
             ],
+            'completed_at' => ['required', 'date', 'before_or_equal:today'],
+            'before_photo' => [
+                'required',
+                'image',
+                'mimes:jpg,jpeg,png,webp',
+                'max:10240',
+            ],
             'evidence' => [
-                'nullable',
+                'required',
                 'array',
+                'min:1',
                 'max:5',
             ],
             'evidence.*' => [
                 'file',
-                'mimes:jpg,jpeg,png,pdf',
+                'mimes:jpg,jpeg,png,pdf,webp',
                 'max:10240',
             ],
         ]);
-
+    
         $complaint = Complaint::find($complaintId);
 
         if (!$complaint) {
@@ -147,8 +155,21 @@ class ComplaintResolutionController extends Controller
         $uploadedPaths = [];
 
         try {
-            // Upload evidence files to Supabase Storage first.
-            foreach ($request->file('evidence', []) ?? [] as $file) {
+            $uploads = [[
+                'file' => $request->file('before_photo'),
+                'evidence_type' => 'before',
+            ]];
+
+            foreach ($request->file('evidence') as $file) {
+                $uploads[] = [
+                    'file' => $file,
+                    'evidence_type' => 'supporting',
+                ];
+            }
+
+            // Upload required before photo and supporting evidence first.
+            foreach ($uploads as $upload) {
+                $file = $upload['file'];
                 $extension = $file->extension() ?: 'bin';
 
                 $path = "resolutions/{$complaint->id}/{$resolutionId}/"
@@ -159,6 +180,7 @@ class ComplaintResolutionController extends Controller
                 $uploadedPaths[] = [
                     'path' => $path,
                     'file' => $file,
+                    'evidence_type' => $upload['evidence_type'],
                 ];
             }
 
@@ -224,6 +246,7 @@ class ComplaintResolutionController extends Controller
                     'complaint_id' => $lockedComplaint->id,
                     'submitted_by' => $profile->id,
                     'resolution_description' => $validated['resolution_description'],
+                    'completed_at' => $validated['completed_at'],
                     'review_status' => 'pending_review',
                     'submitted_at' => now(),
                 ]);
@@ -239,6 +262,7 @@ class ComplaintResolutionController extends Controller
                         'file_name' => $file->getClientOriginalName(),
                         'mime_type' => $file->getMimeType(),
                         'file_size' => $file->getSize(),
+                        'evidence_type' => $uploaded['evidence_type'],
                     ]);
                 }
 
@@ -323,6 +347,8 @@ class ComplaintResolutionController extends Controller
                 'complaint.category',
                 'complaint.barangay',
                 'complaint.activeAssignment.assignee',
+                'complaint.resolutions.submitter',
+                'complaint.resolutions.reviewer',
             ])
             ->latest('submitted_at')
             ->paginate(10);
@@ -373,6 +399,7 @@ class ComplaintResolutionController extends Controller
                 'required_if:decision,returned',
                 'nullable',
                 'string',
+                'not_regex:/^\s*$/',
                 'max:2000',
             ],
         ]);
@@ -428,8 +455,7 @@ class ComplaintResolutionController extends Controller
                     'updated_by' => $profile->id,
                     'old_status' => $oldStatus,
                     'new_status' => 'resolved',
-                    'comment' => 'Resolution approved by LGU-Staff.'
-                        . ($reviewComment ? ' Comment: ' . $reviewComment : ''),
+                    'comment' => 'Resolution approved by LGU-Staff.',
                 ]);
 
                 // Notify the handler that the submitted resolution was approved.
@@ -452,16 +478,8 @@ class ComplaintResolutionController extends Controller
                     ]);
                 }
             } else {
-                // Returned resolution keeps the complaint in progress.
-                ComplaintUpdate::create([
-                    'complaint_id' => $complaint->id,
-                    'updated_by' => $profile->id,
-                    'old_status' => $oldStatus,
-                    'new_status' => $oldStatus,
-                    'comment' => 'Resolution returned by LGU-Staff. Reason: '
-                        . $reviewComment,
-                ]);
-
+                // Returned resolution keeps the complaint in progress. Its
+                // decision and reason remain in the private resolution history.
                 // Notify the handler that the resolution needs revision.
                 Notification::create([
                     'profile_id' => $resolution->submitted_by,

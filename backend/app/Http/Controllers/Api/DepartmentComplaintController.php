@@ -70,6 +70,106 @@ class DepartmentComplaintController extends Controller
         ]);
     }
 
+    public function monitoringIndex(Request $request)
+    {
+        $user = $request->attributes->get('supabase_user');
+
+        if (!$user || empty($user['id'])) {
+            return response()->json([
+                'message' => 'Authenticated user information is missing.',
+            ], 401);
+        }
+
+        $profile = Profile::find($user['id']);
+
+        if (
+            !$profile ||
+            !$profile->is_active ||
+            $profile->role !== 'Department_Head'
+        ) {
+            return response()->json([
+                'message' => 'Only active Department Heads can access department monitoring.',
+            ], 403);
+        }
+
+        if (!$profile->department_id) {
+            return response()->json([
+                'message' => 'Your account has no assigned department.',
+            ], 422);
+        }
+
+        $departmentAssignment = static function ($query) use ($profile) {
+            $query->where('assignment_level', 'lgu')
+                ->where('department_id', $profile->department_id)
+                ->whereNull('ended_at');
+        };
+
+        $departmentComplaints = Complaint::query()
+            ->whereHas('activeAssignment', $departmentAssignment);
+
+        $statusCounts = (clone $departmentComplaints)
+            ->selectRaw('status, COUNT(*) as aggregate')
+            ->groupBy('status')
+            ->pluck('aggregate', 'status');
+
+        $statuses = [
+            'submitted',
+            'under_review',
+            'accepted',
+            'declined',
+            'assigned',
+            'in_progress',
+            'resolved',
+        ];
+        $statusCounts = collect($statuses)
+            ->mapWithKeys(fn (string $status) => [
+                $status => (int) $statusCounts->get($status, 0),
+            ]);
+
+        $awaitingAssignment = (clone $departmentComplaints)
+            ->where('status', 'assigned')
+            ->whereHas('activeAssignment', function ($query) use ($profile) {
+                $query->where('assigned_to', $profile->id)
+                    ->where('assignment_level', 'lgu')
+                    ->where('department_id', $profile->department_id)
+                    ->whereNull('ended_at');
+            })
+            ->count();
+
+        $complaints = $departmentComplaints
+            ->with([
+                'citizen',
+                'category',
+                'barangay',
+                'activeAssignment' => function ($query) use ($departmentAssignment) {
+                    $departmentAssignment($query);
+                    $query->with('assignee');
+                },
+                'escalations' => function ($query) {
+                    $query->where('escalation_type', 'department_to_higher_authority')
+                        ->orderByDesc('created_at')
+                        ->orderByDesc('id');
+                },
+            ])
+            ->latest()
+            ->paginate(10);
+
+        return response()->json([
+            'message' => 'Department monitoring data retrieved successfully.',
+            'data' => $complaints->items(),
+            'status_counts' => $statusCounts,
+            'assignment_counts' => [
+                'awaiting_assignment' => $awaitingAssignment,
+            ],
+            'pagination' => [
+                'current_page' => $complaints->currentPage(),
+                'last_page' => $complaints->lastPage(),
+                'per_page' => $complaints->perPage(),
+                'total' => $complaints->total(),
+            ],
+        ]);
+    }
+
     public function eligiblePersonnel(Request $request)
     {
         $user = $request->attributes->get('supabase_user');
@@ -252,29 +352,29 @@ class DepartmentComplaintController extends Controller
             ], 404);
         }
 
-        $assignment = ComplaintAssignment::where('complaint_id', $complaint->id)
-            ->where('assigned_to', $profile->id)
-            ->where('assignment_level', 'lgu')
-            ->where('department_id', $profile->department_id)
-            ->whereNull('ended_at')
-            ->first();
-
-        if (!$assignment) {
-            return response()->json([
-                'message' => 'This complaint is not currently assigned to you.',
-            ], 403);
-        }
-
-        if ($complaint->status !== 'assigned') {
-            return response()->json([
-                'message' => 'Only assigned complaints can be started.',
-            ], 422);
-        }
-
         DB::transaction(function () use ($complaint, $profile) {
             $lockedComplaint = Complaint::whereKey($complaint->id)
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            $assignment = ComplaintAssignment::where(
+                'complaint_id',
+                $lockedComplaint->id
+            )
+                ->where('assigned_to', $profile->id)
+                ->where('assignment_level', 'lgu')
+                ->where('department_id', $profile->department_id)
+                ->whereNull('ended_at')
+                ->lockForUpdate()
+                ->first();
+
+            if (!$assignment) {
+                throw new \Illuminate\Http\Exceptions\HttpResponseException(
+                    response()->json([
+                        'message' => 'This complaint is not currently assigned to you.',
+                    ], 403)
+                );
+            }
 
             if ($lockedComplaint->status !== 'assigned') {
                 throw new \Illuminate\Http\Exceptions\HttpResponseException(

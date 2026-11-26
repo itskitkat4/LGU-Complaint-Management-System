@@ -28,7 +28,9 @@ class DepartmentPersonnelAssignmentTest extends TestCase
     {
         parent::setUp();
 
+        Schema::dropIfExists('complaint_escalations');
         Schema::dropIfExists('complaint_updates');
+        Schema::dropIfExists('complaint_attachments');
         Schema::dropIfExists('complaint_assignments');
         Schema::dropIfExists('complaints');
         Schema::dropIfExists('profiles');
@@ -58,6 +60,7 @@ class DepartmentPersonnelAssignmentTest extends TestCase
             $table->uuid('citizen_id');
             $table->uuid('category_id')->nullable();
             $table->uuid('barangay_id')->nullable();
+            $table->boolean('is_anonymous')->default(false);
             $table->string('title');
             $table->text('description');
             $table->string('priority')->default('medium');
@@ -88,6 +91,37 @@ class DepartmentPersonnelAssignmentTest extends TestCase
             $table->string('old_status')->nullable();
             $table->string('new_status')->nullable();
             $table->text('comment')->nullable();
+        });
+
+        Schema::create('complaint_attachments', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->uuid('complaint_id');
+            $table->string('file_name');
+            $table->string('file_path');
+            $table->string('mime_type')->nullable();
+            $table->string('evidence_type')->default('supporting');
+            $table->uuid('uploaded_by')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('complaint_escalations', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->uuid('complaint_id');
+            $table->string('escalation_type');
+            $table->uuid('requested_by');
+            $table->uuid('origin_barangay_id')->nullable();
+            $table->uuid('origin_department_id')->nullable();
+            $table->uuid('destination_department_id')->nullable();
+            $table->string('higher_authority_office')->nullable();
+            $table->text('reason');
+            $table->string('status')->default('pending');
+            $table->uuid('reviewed_by')->nullable();
+            $table->text('review_comment')->nullable();
+            $table->timestamp('reviewed_at')->nullable();
+            $table->text('outcome_notes')->nullable();
+            $table->uuid('outcome_recorded_by')->nullable();
+            $table->timestamp('outcome_recorded_at')->nullable();
+            $table->timestamps();
         });
 
         Schema::create('complaint_categories', function (Blueprint $table) {
@@ -186,13 +220,20 @@ class DepartmentPersonnelAssignmentTest extends TestCase
     private function authenticateAs(string $id, string $email): void
     {
         Http::fake([
-            '*' => Http::response([
-                'id' => $id,
-                'email' => $email,
-            ], 200),
+            '*' => function ($request) {
+                $authorization = $request->header('Authorization');
+                $authorization = is_array($authorization) ? ($authorization[0] ?? '') : $authorization;
+                $subject = $this->syntheticSupabaseSubject($authorization);
+
+                return Http::response([
+                    'id' => $subject,
+                    'email' => $subject . '@example.com',
+                    'app_metadata' => ['bantayserbisyo_password_setup_completed' => true],
+                ], 200);
+            },
         ]);
 
-        $this->withToken('fake-test-token');
+        $this->withToken($this->syntheticSupabaseToken($id, ['password']));
     }
 
     private function assignmentPayload(string $assignedTo): array
@@ -430,6 +471,80 @@ class DepartmentPersonnelAssignmentTest extends TestCase
         $this->assertNotEquals($endedComplaintId, $this->complaintId);
     }
 
+    public function test_department_head_complaint_queue_redacts_anonymous_identity(): void
+    {
+        DB::table('complaints')
+            ->where('id', $this->complaintId)
+            ->update(['is_anonymous' => true]);
+
+        $this->authenticateAs($this->headId, 'head@example.com');
+
+        $response = $this->getJson('/api/department/complaints');
+
+        $response->assertOk()
+            ->assertJsonPath('data.0.id', $this->complaintId)
+            ->assertJsonPath('data.0.is_anonymous', true)
+            ->assertJsonMissingPath('data.0.citizen_id')
+            ->assertJsonMissingPath('data.0.citizen');
+    }
+
+    public function test_department_head_monitoring_redacts_anonymous_identity(): void
+    {
+        DB::table('complaints')
+            ->where('id', $this->complaintId)
+            ->update(['is_anonymous' => true]);
+
+        $this->authenticateAs($this->headId, 'head@example.com');
+
+        $response = $this->getJson('/api/department/monitoring');
+
+        $response->assertOk()
+            ->assertJsonPath('data.0.id', $this->complaintId)
+            ->assertJsonPath('data.0.is_anonymous', true)
+            ->assertJsonMissingPath('data.0.citizen_id')
+            ->assertJsonMissingPath('data.0.citizen');
+    }
+
+    public function test_department_personnel_complaint_queue_redacts_anonymous_identity(): void
+    {
+        DB::table('complaint_assignments')
+            ->where('complaint_id', $this->complaintId)
+            ->update(['assigned_to' => $this->personnelId]);
+        DB::table('complaints')
+            ->where('id', $this->complaintId)
+            ->update(['is_anonymous' => true]);
+
+        $this->authenticateAs($this->personnelId, 'personnel@example.com');
+
+        $response = $this->getJson('/api/department/personnel/complaints');
+
+        $response->assertOk()
+            ->assertJsonPath('data.0.id', $this->complaintId)
+            ->assertJsonPath('data.0.is_anonymous', true)
+            ->assertJsonMissingPath('data.0.citizen_id')
+            ->assertJsonMissingPath('data.0.citizen');
+    }
+
+    public function test_department_personnel_complaint_detail_redacts_anonymous_identity(): void
+    {
+        DB::table('complaint_assignments')
+            ->where('complaint_id', $this->complaintId)
+            ->update(['assigned_to' => $this->personnelId]);
+        DB::table('complaints')
+            ->where('id', $this->complaintId)
+            ->update(['is_anonymous' => true]);
+
+        $this->authenticateAs($this->personnelId, 'personnel@example.com');
+
+        $response = $this->getJson("/api/department/personnel/complaints/{$this->complaintId}");
+
+        $response->assertOk()
+            ->assertJsonPath('data.id', $this->complaintId)
+            ->assertJsonPath('data.is_anonymous', true)
+            ->assertJsonMissingPath('data.citizen_id')
+            ->assertJsonMissingPath('data.citizen');
+    }
+
     public function test_inactive_personnel_cannot_access_complaint_queue(): void
     {
         $this->authenticateAs(
@@ -462,5 +577,241 @@ class DepartmentPersonnelAssignmentTest extends TestCase
         $response = $this->getJson('/api/department/personnel/complaints');
 
         $response->assertUnprocessable();
+    }
+
+    public function test_personnel_can_start_work_on_their_active_assignment(): void
+    {
+        DB::table('complaints')
+            ->where('id', $this->complaintId)
+            ->update(['status' => 'assigned']);
+        DB::table('complaint_assignments')
+            ->where('complaint_id', $this->complaintId)
+            ->update(['assigned_to' => $this->personnelId]);
+
+        $this->authenticateAs($this->personnelId, 'personnel@example.com');
+
+        $response = $this->postJson(
+            "/api/department/personnel/complaints/{$this->complaintId}/start"
+        );
+
+        $response->assertOk()
+            ->assertJsonPath('data.status', 'in_progress');
+
+        $this->assertDatabaseHas('complaints', [
+            'id' => $this->complaintId,
+            'status' => 'in_progress',
+        ]);
+        $this->assertDatabaseHas('complaint_updates', [
+            'complaint_id' => $this->complaintId,
+            'updated_by' => $this->personnelId,
+            'old_status' => 'assigned',
+            'new_status' => 'in_progress',
+        ]);
+    }
+
+    public function test_personnel_cannot_start_work_after_their_assignment_has_ended(): void
+    {
+        DB::table('complaints')
+            ->where('id', $this->complaintId)
+            ->update(['status' => 'assigned']);
+        DB::table('complaint_assignments')
+            ->where('complaint_id', $this->complaintId)
+            ->update([
+                'assigned_to' => $this->personnelId,
+                'ended_at' => now(),
+            ]);
+
+        $this->authenticateAs($this->personnelId, 'personnel@example.com');
+
+        $response = $this->postJson(
+            "/api/department/personnel/complaints/{$this->complaintId}/start"
+        );
+
+        $response->assertForbidden();
+
+        $this->assertDatabaseHas('complaints', [
+            'id' => $this->complaintId,
+            'status' => 'assigned',
+        ]);
+        $this->assertDatabaseCount('complaint_updates', 0);
+    }
+
+    public function test_department_head_monitoring_is_scoped_and_includes_statuses_handlers_and_escalations(): void
+    {
+        $departmentComplaintId = $this->createAssignedComplaint(
+            $this->personnelId,
+            $this->departmentId
+        );
+        DB::table('complaints')
+            ->where('id', $departmentComplaintId)
+            ->update(['status' => 'assigned']);
+
+        $otherDepartmentComplaintId = $this->createAssignedComplaint(
+            $this->otherPersonnelId,
+            $this->otherDepartmentId
+        );
+        $endedAssignmentComplaintId = $this->createAssignedComplaint(
+            $this->personnelId,
+            $this->departmentId,
+            now()
+        );
+
+        DB::table('complaint_escalations')->insert([
+            'id' => '66666666-6666-4666-8666-666666666666',
+            'complaint_id' => $this->complaintId,
+            'escalation_type' => 'department_to_higher_authority',
+            'requested_by' => $this->headId,
+            'origin_department_id' => $this->departmentId,
+            'higher_authority_office' => 'Regional Office',
+            'reason' => 'Requires regional review.',
+            'status' => 'pending',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('complaint_escalations')->insert([
+            'id' => '77777777-7777-4777-8777-777777777777',
+            'complaint_id' => $this->complaintId,
+            'escalation_type' => 'barangay_to_department',
+            'requested_by' => $this->headId,
+            'origin_barangay_id' => '88888888-8888-4888-8888-888888888888',
+            'destination_department_id' => $this->departmentId,
+            'reason' => 'Barangay escalation review.',
+            'status' => 'accepted',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->authenticateAs($this->headId, 'head@example.com');
+
+        $response = $this->getJson(
+            "/api/department/monitoring?department_id={$this->otherDepartmentId}"
+        );
+
+        $response->assertOk()
+            ->assertJsonPath('message', 'Department monitoring data retrieved successfully.')
+            ->assertJsonPath('status_counts.assigned', 1)
+            ->assertJsonPath('status_counts.in_progress', 1)
+            ->assertJsonPath('status_counts.submitted', 0)
+            ->assertJsonPath('assignment_counts.awaiting_assignment', 0)
+            ->assertJsonPath('pagination.total', 2)
+            ->assertJsonPath('pagination.current_page', 1);
+
+        $records = collect($response->json('data'))->keyBy('id')->all();
+        $this->assertCount(2, $records);
+        $this->assertArrayHasKey($this->complaintId, $records);
+        $this->assertArrayHasKey($departmentComplaintId, $records);
+        $this->assertArrayNotHasKey($otherDepartmentComplaintId, $records);
+        $this->assertArrayNotHasKey($endedAssignmentComplaintId, $records);
+        $this->assertSame(
+            $this->departmentId,
+            $records[$departmentComplaintId]['active_assignment']['department_id']
+        );
+        $this->assertSame(
+            $this->personnelId,
+            $records[$departmentComplaintId]['active_assignment']['assignee']['id']
+        );
+        $this->assertCount(1, $records[$this->complaintId]['escalations']);
+        $this->assertSame(
+            'department_to_higher_authority',
+            $records[$this->complaintId]['escalations'][0]['escalation_type']
+        );
+    }
+
+    public function test_department_head_monitoring_requires_authentication_and_department_head_role(): void
+    {
+        $this->getJson('/api/department/monitoring')->assertUnauthorized();
+
+        $this->authenticateAs($this->citizenId, 'citizen@example.com');
+        $this->getJson('/api/department/monitoring')->assertForbidden();
+
+        $this->authenticateAs($this->personnelId, 'personnel@example.com');
+        $this->getJson('/api/department/monitoring')->assertForbidden();
+    }
+
+    public function test_department_head_monitoring_paginates_department_complaints(): void
+    {
+        for ($index = 0; $index < 10; $index++) {
+            $this->createAssignedComplaint($this->personnelId, $this->departmentId);
+        }
+
+        $this->authenticateAs($this->headId, 'head@example.com');
+
+        $response = $this->getJson('/api/department/monitoring?page=2');
+
+        $response->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('pagination.current_page', 2)
+            ->assertJsonPath('pagination.last_page', 2)
+            ->assertJsonPath('pagination.per_page', 10)
+            ->assertJsonPath('pagination.total', 11);
+    }
+
+    public function test_department_head_awaiting_assignment_counts_only_active_complaints_still_assigned_to_the_head(): void
+    {
+        $headComplaint = $this->createAssignedComplaint(
+            $this->headId,
+            $this->departmentId
+        );
+        DB::table('complaints')
+            ->where('id', $headComplaint)
+            ->update(['status' => 'assigned']);
+
+        $personnelComplaint = $this->createAssignedComplaint(
+            $this->personnelId,
+            $this->departmentId
+        );
+        DB::table('complaints')
+            ->where('id', $personnelComplaint)
+            ->update(['status' => 'assigned']);
+
+        $endedHeadAssignment = $this->createAssignedComplaint(
+            $this->headId,
+            $this->departmentId,
+            now()
+        );
+        DB::table('complaints')
+            ->where('id', $endedHeadAssignment)
+            ->update(['status' => 'assigned']);
+
+        $this->authenticateAs($this->headId, 'head@example.com');
+
+        $this->getJson('/api/department/monitoring')
+            ->assertOk()
+            ->assertJsonPath('status_counts.assigned', 2)
+            ->assertJsonPath('assignment_counts.awaiting_assignment', 1);
+    }
+
+    public function test_department_head_monitoring_returns_empty_counts_for_a_department_without_active_assignments(): void
+    {
+        Profile::whereKey($this->headId)
+            ->update(['department_id' => $this->otherDepartmentId]);
+
+        $this->authenticateAs($this->headId, 'head@example.com');
+
+        $response = $this->getJson('/api/department/monitoring');
+
+        $response->assertOk()
+            ->assertExactJson([
+                'message' => 'Department monitoring data retrieved successfully.',
+                'data' => [],
+                'status_counts' => [
+                    'submitted' => 0,
+                    'under_review' => 0,
+                    'accepted' => 0,
+                    'declined' => 0,
+                    'assigned' => 0,
+                    'in_progress' => 0,
+                    'resolved' => 0,
+                ],
+                'assignment_counts' => [
+                    'awaiting_assignment' => 0,
+                ],
+                'pagination' => [
+                    'current_page' => 1,
+                    'last_page' => 1,
+                    'per_page' => 10,
+                    'total' => 0,
+                ],
+            ]);
     }
 }

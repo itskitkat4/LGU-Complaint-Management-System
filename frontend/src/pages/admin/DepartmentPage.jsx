@@ -41,7 +41,9 @@ export default function DepartmentPage() {
         setRefreshing(true);
       }
 
-      const data = await getDepartments();
+      const data = await getDepartments({
+        forceRefresh: isRefresh,
+    });
 
       if (!Array.isArray(data)) {
         throw new Error("The server returned an invalid department list.");
@@ -196,21 +198,24 @@ export default function DepartmentPage() {
       <div className="space-y-6">
         {/* Page heading */}
         <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-              Department Management
-            </h2>
+          <div className="flex items-start gap-3">
+            <span className="mt-1 h-10 w-1 shrink-0 rounded-full bg-emerald-500" aria-hidden="true" />
+            <div>
+              <h2 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+                Department Management
+              </h2>
 
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              View and manage registered departments in the municipality.
-            </p>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                View and manage registered departments in the municipality.
+              </p>
+            </div>
           </div>
 
           <button
             type="button"
             onClick={handleAdd}
             disabled={saving}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="glass-btn-primary inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Icon name="plus" className="h-4 w-4" />
             Add Department
@@ -219,7 +224,7 @@ export default function DepartmentPage() {
 
         {/* Summary cards */}
         <section className="grid gap-4 sm:grid-cols-2">
-          <div className="rounded-xl border border-slate-200 bg-white p-5">
+          <div className="glass rounded-2xl p-5">
             <p className="text-sm font-medium text-slate-500">
               Total Departments
             </p>
@@ -233,7 +238,7 @@ export default function DepartmentPage() {
             )}
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white p-5">
+          <div className="glass rounded-2xl p-5">
             <p className="text-sm font-medium text-slate-500">
               Search Results
             </p>
@@ -250,20 +255,23 @@ export default function DepartmentPage() {
 
         {/* Add / Edit form */}
         {showForm && (
-          <section className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
+          <section className="glass rounded-2xl p-5 sm:p-6">
             <div className="flex items-start justify-between gap-4">
-              <div>
-                <h3 className="font-semibold text-slate-900">
-                  {editingId !== null
-                    ? "Edit Department"
-                    : "Add New Department"}
-                </h3>
+              <div className="flex items-start gap-3">
+                <span className="mt-0.5 h-9 w-1 shrink-0 rounded-full bg-emerald-500" aria-hidden="true" />
+                <div>
+                  <h3 className="font-semibold text-slate-900">
+                    {editingId !== null
+                      ? "Edit Department"
+                      : "Add New Department"}
+                  </h3>
 
-                <p className="mt-1 text-sm text-slate-500">
-                  {editingId !== null
-                    ? "Update the department information below."
-                    : "Enter the details for the new department."}
-                </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {editingId !== null
+                      ? "Update the department information below."
+                      : "Enter the details for the new department."}
+                  </p>
+                </div>
               </div>
 
               <button
@@ -271,7 +279,7 @@ export default function DepartmentPage() {
                 onClick={handleCancel}
                 disabled={saving}
                 aria-label="Close form"
-                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50"
+                className="rounded-xl p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50"
               >
                 <Icon name="x" className="h-5 w-5" />
               </button>
@@ -329,7 +337,7 @@ export default function DepartmentPage() {
               {formError && (
                 <div
                   role="alert"
-                  className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+                  className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
                 >
                   {formError}
                 </div>
@@ -339,7 +347,7 @@ export default function DepartmentPage() {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="inline-flex items-center justify-center rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="glass-btn-primary inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {saving
                     ? "Saving..."
@@ -352,7 +360,7 @@ export default function DepartmentPage() {
                   type="button"
                   onClick={handleCancel}
                   disabled={saving}
-                  className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="glass-btn-secondary rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -362,7 +370,7 @@ export default function DepartmentPage() {
         )}
 
         {/* Department list */}
-        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <section className="glass overflow-hidden rounded-2xl">
           <div className="flex flex-col gap-4 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
             <div>
               <h3 className="font-semibold text-slate-900">
@@ -395,7 +403,7 @@ export default function DepartmentPage() {
                 type="button"
                 onClick={() => fetchDepartments(true)}
                 disabled={loading || refreshing}
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="glass-btn-secondary inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Icon
                   name="refresh-cw"
@@ -410,7 +418,7 @@ export default function DepartmentPage() {
           {error && (
             <div
               role="alert"
-              className="m-4 rounded-lg border border-red-200 bg-red-50 p-4"
+              className="m-4 rounded-xl border border-red-200 bg-red-50 p-4"
             >
               <p className="text-sm text-red-700">{error}</p>
 
@@ -434,7 +442,7 @@ export default function DepartmentPage() {
                 className="w-full min-w-[650px] text-left text-sm"
                 aria-hidden="true"
               >
-                <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <thead className="glass-soft text-xs font-semibold uppercase tracking-wide text-slate-500">
                   <tr>
                     <th className="px-5 py-3.5">Department Name</th>
                     <th className="px-5 py-3.5">Description</th>
@@ -457,8 +465,8 @@ export default function DepartmentPage() {
                       </td>
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-2">
-                          <Skeleton className="h-7 w-12 rounded-lg" />
-                          <Skeleton className="h-7 w-14 rounded-lg" />
+                          <Skeleton className="h-7 w-12 rounded-xl" />
+                          <Skeleton className="h-7 w-14 rounded-xl" />
                         </div>
                       </td>
                     </tr>
@@ -469,7 +477,7 @@ export default function DepartmentPage() {
           ) : !error ? (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[650px] text-left text-sm">
-                <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <thead className="glass-soft text-xs font-semibold uppercase tracking-wide text-slate-500">
                   <tr>
                     <th scope="col" className="px-5 py-3.5">
                       Department Name
@@ -493,7 +501,7 @@ export default function DepartmentPage() {
                   {filteredDepartments.map((department) => (
                     <tr
                       key={department.id}
-                      className="transition-colors hover:bg-slate-50"
+                      className="glass-hover"
                     >
                       <td className="px-5 py-4 font-semibold text-slate-900">
                         {department.name}
@@ -513,7 +521,7 @@ export default function DepartmentPage() {
                             type="button"
                             onClick={() => handleEdit(department)}
                             disabled={deletingId !== null || saving}
-                            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="glass-btn-secondary rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             Edit
                           </button>
@@ -522,7 +530,7 @@ export default function DepartmentPage() {
                             type="button"
                             onClick={() => handleDelete(department.id)}
                             disabled={deletingId !== null || saving}
-                            className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="rounded-xl border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             {deletingId === department.id
                               ? "Deleting..."

@@ -59,6 +59,7 @@ class StaffEscalationReviewTest extends TestCase
         Schema::create('complaints', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('citizen_id')->nullable();
+            $table->boolean('is_anonymous')->default(false);
             $table->uuid('category_id')->nullable();
             $table->uuid('barangay_id')->nullable();
             $table->string('title');
@@ -245,10 +246,11 @@ class StaffEscalationReviewTest extends TestCase
             '*' => Http::response([
                 'id' => $profileId,
                 'email' => $email,
+                'app_metadata' => ['bantayserbisyo_password_setup_completed' => true],
             ], 200),
         ]);
 
-        $this->withToken('fake-test-token');
+        $this->withToken($this->syntheticSupabaseToken($profileId, ['password']));
     }
 
     private function reviewUrl(): string
@@ -256,6 +258,28 @@ class StaffEscalationReviewTest extends TestCase
         return "/api/staff/escalations/{$this->escalationId}/review";
     }
 
+    public function test_staff_escalation_response_includes_anonymity_flag_without_citizen_identity(): void
+    {
+        DB::table('complaints')
+            ->where('id', $this->complaintId)
+            ->update(['is_anonymous' => true]);
+
+        $this->authenticateAs($this->staffId, 'staff@example.com');
+
+        $response = $this->getJson('/api/staff/escalations')
+            ->assertOk();
+
+        $data = $response->json('data');
+
+        $this->assertCount(1, $data);
+
+        $complaint = $data[0]['complaint'] ?? null;
+
+        $this->assertIsArray($complaint);
+        $this->assertTrue($complaint['is_anonymous']);
+        $this->assertArrayNotHasKey('citizen_id', $complaint);
+        $this->assertArrayNotHasKey('citizen', $complaint);
+    }
     public function test_lgu_staff_can_accept_barangay_escalation(): void
     {
         $this->authenticateAs($this->staffId, 'staff@example.com');
